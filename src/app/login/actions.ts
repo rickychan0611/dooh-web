@@ -4,22 +4,26 @@ import { redirect } from "next/navigation";
 import { getEnv, isDevAuthBypassEnabled } from "@/lib/env";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
-export async function sendMagicLink(formData: FormData) {
+function text(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+export async function signIn(formData: FormData) {
   if (isDevAuthBypassEnabled()) redirect("/dashboard");
 
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = text(formData, "email").toLowerCase();
+  const password = text(formData, "password");
   if (email !== getEnv().OWNER_ALLOWLIST_EMAIL.toLowerCase()) {
     redirect("/login?error=not-allowed");
   }
+
   const supabase = await getSupabaseServer();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${getEnv().NEXT_PUBLIC_APP_URL}/auth/callback`,
-    },
-  });
-  if (error) redirect("/login?error=send-failed");
-  redirect("/login?sent=1");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    redirect("/login?error=invalid-credentials");
+  }
+
+  redirect("/dashboard");
 }
 
 export async function signOut() {

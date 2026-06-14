@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminClaimCodeSchema } from "@dooh/shared";
+import { adminClaimCodeSchema } from "@/lib/shared";
 import { requireAdmin } from "@/lib/auth";
 import { encryptPairingToken } from "@/lib/pairing-crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";

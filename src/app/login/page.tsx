@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isDevAuthBypassEnabled } from "@/lib/env";
-import { sendMagicLink } from "./actions";
+import { signIn } from "./actions";
 
 export default async function LoginPage({
   searchParams,
@@ -17,33 +17,38 @@ export default async function LoginPage({
         <p className="eyebrow">DOOH Control Room</p>
         <h1>Admin sign in</h1>
         <p className="muted">
-          Enter the allowlisted owner email. Supabase will send a secure magic
-          link.
+          Sign in with the allowlisted owner email and password.
         </p>
-        {params.sent && <p className="notice success">Check your inbox.</p>}
         {params.error === "not-allowed" && (
           <p className="notice danger">
             That email cannot access this dashboard.
           </p>
         )}
-        {params.error === "send-failed" && (
+        {params.error === "invalid-credentials" && (
+          <p className="notice danger">Email or password is incorrect.</p>
+        )}
+        {params.error === "auth-failed" && (
           <p className="notice danger">
-            The magic link could not be sent. Please try again.
+            Authentication failed. Please sign in again.
           </p>
         )}
-        {params.error === "invalid-link" && (
-          <p className="notice danger">
-            This magic link is invalid or expired. Request a new link and open
-            only the newest email.
-          </p>
-        )}
-        <form action={sendMagicLink} className="stack">
+        <form action={signIn} className="stack">
           <label>
             Email
             <input name="email" type="email" required autoComplete="email" />
           </label>
+          <label>
+            Password
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              minLength={8}
+            />
+          </label>
           <button className="button" type="submit">
-            Send magic link
+            Sign in
           </button>
         </form>
         <Link href="/screens">View public screens</Link>

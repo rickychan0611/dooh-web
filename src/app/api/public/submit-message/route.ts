@@ -1,4 +1,4 @@
-import { publicSubmissionSchema } from "@dooh/shared";
+import { publicSubmissionSchema } from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
 import {
   containsBlockedWord,

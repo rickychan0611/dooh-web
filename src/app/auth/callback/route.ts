@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (authError || !code) {
     const errorPath = destination.startsWith("/account")
       ? "/account/login?error=invalid-link"
-      : "/login?error=invalid-link";
+      : "/login?error=auth-failed";
     return NextResponse.redirect(new URL(errorPath, url.origin));
   }
 
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   if (error) {
     const errorPath = destination.startsWith("/account")
       ? "/account/login?error=invalid-link"
-      : "/login?error=invalid-link";
+      : "/login?error=auth-failed";
     return NextResponse.redirect(new URL(errorPath, url.origin));
   }
 

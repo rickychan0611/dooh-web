@@ -2,8 +2,6 @@
 
 # dependencies
 /node_modules
-/packages/shared/node_modules
-/packages/shared/dist
 /.pnp
 .pnp.*
 .yarn/*

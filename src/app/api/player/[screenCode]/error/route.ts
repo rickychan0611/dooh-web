@@ -1,4 +1,4 @@
-import { playerErrorRequestSchema } from "@dooh/shared";
+import { playerErrorRequestSchema } from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
 import { authenticateDevice } from "@/lib/player";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";

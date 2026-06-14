@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@dooh/shared"],
   async headers() {
     const corsHeaders = [
       { key: "Access-Control-Allow-Origin", value: "*" },

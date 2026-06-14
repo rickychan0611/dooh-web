@@ -1,4 +1,4 @@
-import type { PlayerManifest } from "@dooh/shared";
+import type { PlayerManifest } from "@/lib/shared";
 import { getEnv } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { bearerToken, hashToken, randomToken } from "@/lib/security";

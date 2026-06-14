@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import {
   createPairingSessionRequestSchema,
   createPairingSessionResponseSchema,
-} from "@dooh/shared";
+} from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { hashToken, randomToken } from "@/lib/security";

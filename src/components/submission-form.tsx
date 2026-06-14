@@ -1,6 +1,6 @@
 "use client";
 
-import { BULLETIN_CATEGORIES } from "@dooh/shared";
+import { BULLETIN_CATEGORIES } from "@/lib/shared";
 import { useState } from "react";
 
 export function SubmissionForm({

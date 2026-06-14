@@ -1,7 +1,7 @@
 import {
   pairingSessionStatusRequestSchema,
   pairingSessionStatusResponseSchema,
-} from "@dooh/shared";
+} from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
 import { decryptPairingToken } from "@/lib/pairing-crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";

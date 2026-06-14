@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatBulletinCategoryLabel } from "@dooh/shared";
+import { formatBulletinCategoryLabel } from "@/lib/shared";
 import { notFound } from "next/navigation";
 import { PostActions } from "@/components/post-actions";
 import { getPublicUser } from "@/lib/public-auth";
