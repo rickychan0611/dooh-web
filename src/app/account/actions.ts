@@ -57,11 +57,19 @@ export async function requestPasswordReset(formData: FormData) {
 }
 
 export async function updatePassword(formData: FormData) {
-  await requirePublicUser("/account/reset-password");
+  const user = await requirePublicUser("/account/reset-password");
   const password = text(formData, "password");
   const supabase = await getSupabaseServer();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) redirect("/account/reset-password?error=update-failed");
+
+  const isAdmin =
+    user.email?.toLowerCase() === getEnv().OWNER_ALLOWLIST_EMAIL.toLowerCase();
+  if (isAdmin) {
+    await supabase.auth.signOut();
+    redirect("/login?message=password-updated");
+  }
+
   redirect("/account/profile?password=updated");
 }
 

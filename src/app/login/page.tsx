@@ -32,6 +32,11 @@ export default async function LoginPage({
             Authentication failed. Please sign in again.
           </p>
         )}
+        {params.message === "password-updated" && (
+          <p className="notice success">
+            Password updated. Sign in with your new password.
+          </p>
+        )}
         <form action={signIn} className="stack">
           <label>
             Email
@@ -51,6 +56,7 @@ export default async function LoginPage({
             Sign in
           </button>
         </form>
+        <Link href="/account/forgot-password">Forgot password?</Link>
         <Link href="/screens">View public screens</Link>
       </section>
     </main>
