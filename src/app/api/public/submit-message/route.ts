@@ -7,6 +7,7 @@ import {
 } from "@/lib/moderation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { serviceState } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   try {
@@ -47,10 +48,43 @@ export async function POST(request: Request) {
     const admin = getSupabaseAdmin();
     const { data: screen } = await admin
       .from("screens")
-      .select("id, organization_id, screen_code, is_active")
+      .select("id, organization_id, screen_code, is_active, community_access, community_moderation, community_attachments_allowed")
       .eq("screen_code", input.screenCode.toUpperCase())
       .single();
     if (!screen?.is_active) return apiError("SCREEN_NOT_FOUND", "Screen not found.", 404);
+    const { data: organization } = await admin
+      .from("organizations")
+      .select("*")
+      .eq("id", screen.organization_id)
+      .single();
+    if (!organization || serviceState(organization) === "suspended") {
+      return apiError("SCREEN_UNAVAILABLE", "This screen is unavailable.", 403);
+    }
+    if (screen.community_access === "disabled") {
+      return apiError("COMMUNITY_DISABLED", "Community posting is disabled.", 403);
+    }
+    const { data: membership } = await admin
+      .from("community_members")
+      .select("status")
+      .eq("organization_id", screen.organization_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (membership?.status === "banned" || membership?.status === "suspended") {
+      return apiError("COMMUNITY_ACCESS_BLOCKED", "This account cannot post here.", 403);
+    }
+    if (screen.community_access === "invite_only" && !membership) {
+      return apiError("INVITATION_REQUIRED", "This board is invite only.", 403);
+    }
+    if (!membership && screen.community_access === "open") {
+      await admin.from("community_members").insert({
+        organization_id: screen.organization_id,
+        user_id: user.id,
+        status: "active",
+      });
+    }
+    if (mediaFile && !screen.community_attachments_allowed) {
+      return apiError("ATTACHMENTS_DISABLED", "Attachments are disabled for this board.", 403);
+    }
 
     const { data: settings } = await admin
       .from("organization_settings")
@@ -85,7 +119,10 @@ export async function POST(request: Request) {
     }
 
     const onsite = await verifyQrToken(screen.id, input.qrToken);
-    const status = onsite ? "active" : "pending";
+    const autoPublish =
+      screen.community_moderation === "auto_publish" ||
+      membership?.status === "trusted";
+    const status = autoPublish ? "active" : "pending";
     const messageId = crypto.randomUUID();
     const { data: postNumber, error: numberError } = await admin.rpc(
       "allocate_post_number",
@@ -137,7 +174,7 @@ export async function POST(request: Request) {
         source: onsite ? "onsite" : "remote",
         status,
         duration: settings?.default_message_duration ?? 12,
-        approved_at: onsite ? new Date().toISOString() : null,
+        approved_at: autoPublish ? new Date().toISOString() : null,
         ...mediaRecord,
       })
       .select("id")
@@ -149,7 +186,7 @@ export async function POST(request: Request) {
       throw error;
     }
     return Response.json(
-      { id: message.id, postNumber, status, publishedImmediately: onsite },
+      { id: message.id, postNumber, status, publishedImmediately: autoPublish },
       { status: 201 },
     );
   } catch (error) {

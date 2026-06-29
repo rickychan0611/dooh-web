@@ -15,21 +15,22 @@ export default async function LoginPage({
     <main className="center-shell">
       <section className="panel auth-panel">
         <p className="eyebrow">DOOH Control Room</p>
-        <h1>Admin sign in</h1>
+        <h1>Business sign in</h1>
         <p className="muted">
-          Sign in with the allowlisted owner email and password.
+          Manage your screens, promotions, and community board.
         </p>
-        {params.error === "not-allowed" && (
-          <p className="notice danger">
-            That email cannot access this dashboard.
-          </p>
-        )}
         {params.error === "invalid-credentials" && (
           <p className="notice danger">Email or password is incorrect.</p>
         )}
         {params.error === "auth-failed" && (
           <p className="notice danger">
             Authentication failed. Please sign in again.
+          </p>
+        )}
+        {params.error === "auth-unavailable" && (
+          <p className="notice danger">
+            Could not reach the authentication service. Check your Supabase
+            configuration in .env.local.
           </p>
         )}
         {params.message === "password-updated" && (
@@ -56,8 +57,10 @@ export default async function LoginPage({
             Sign in
           </button>
         </form>
-        <Link href="/account/forgot-password">Forgot password?</Link>
-        <Link href="/screens">View public screens</Link>
+        <div className="auth-links">
+          <Link href="/signup">Start a free trial</Link>
+          <Link href="/account/forgot-password">Forgot password?</Link>
+        </div>
       </section>
     </main>
   );

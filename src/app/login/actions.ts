@@ -1,7 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getEnv, isDevAuthBypassEnabled } from "@/lib/env";
+import {
+  requireOrganization,
+  setActiveOrganizationCookie,
+} from "@/lib/auth";
+import { isDevAuthBypassEnabled } from "@/lib/env";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 function text(formData: FormData, key: string) {
@@ -11,25 +15,27 @@ function text(formData: FormData, key: string) {
 export async function signIn(formData: FormData) {
   if (isDevAuthBypassEnabled()) redirect("/dashboard");
 
-  const email = text(formData, "email").toLowerCase();
-  const password = text(formData, "password");
-  if (email !== getEnv().OWNER_ALLOWLIST_EMAIL.toLowerCase()) {
-    redirect("/login?error=not-allowed");
-  }
-
   const supabase = await getSupabaseServer();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    redirect("/login?error=invalid-credentials");
-  }
-
+  const { error } = await supabase.auth.signInWithPassword({
+    email: text(formData, "email").toLowerCase(),
+    password: text(formData, "password"),
+  });
+  if (error) redirect("/login?error=invalid-credentials");
   redirect("/dashboard");
 }
 
 export async function signOut() {
-  if (isDevAuthBypassEnabled()) redirect("/dashboard");
-
   const supabase = await getSupabaseServer();
   await supabase.auth.signOut();
-  redirect("/login");
+  redirect("/");
+}
+
+export async function switchOrganization(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const { memberships } = await requireOrganization();
+  if (!memberships.some((item) => item.organization_id === organizationId)) {
+    throw new Error("Organization access required.");
+  }
+  await setActiveOrganizationCookie(organizationId);
+  redirect("/dashboard");
 }

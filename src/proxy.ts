@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (!code || request.nextUrl.pathname === "/auth/callback") {
     return NextResponse.next();

@@ -5,7 +5,7 @@ beforeAll(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service";
-  process.env.OWNER_ALLOWLIST_EMAIL = "owner@example.com";
+  process.env.PLATFORM_OWNER_EMAILS = "owner@example.com";
   process.env.TOKEN_PEPPER = "token-pepper-with-enough-length";
   process.env.PAIRING_TOKEN_ENCRYPTION_KEY =
     "pairing-encryption-key-with-enough-length";

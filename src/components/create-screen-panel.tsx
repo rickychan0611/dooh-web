@@ -5,10 +5,14 @@ import { createScreen } from "@/app/dashboard/actions";
 
 export function CreateScreenPanel({
   errorMessage,
+  defaultOpen = false,
+  canCreate = true,
 }: {
   errorMessage?: string;
+  defaultOpen?: boolean;
+  canCreate?: boolean;
 }) {
-  const [openPanel, setOpenPanel] = useState(Boolean(errorMessage));
+  const [openPanel, setOpenPanel] = useState(defaultOpen || Boolean(errorMessage));
 
   return (
     <>
@@ -17,9 +21,13 @@ export function CreateScreenPanel({
           <p className="eyebrow">Fleet</p>
           <h1>Screens</h1>
         </div>
-        <button className="button" type="button" onClick={() => setOpenPanel(true)}>Create screen</button>
+        {canCreate && (
+          <button className="button" type="button" onClick={() => setOpenPanel(true)}>
+            Create screen
+          </button>
+        )}
       </header>
-      {openPanel && (
+      {canCreate && openPanel && (
         <section className="panel compact-create-panel">
           <div className="panel-heading">
             <div>

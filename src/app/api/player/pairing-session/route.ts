@@ -2,13 +2,17 @@ import { randomInt } from "node:crypto";
 import {
   createPairingSessionRequestSchema,
   createPairingSessionResponseSchema,
+  PAIRING_CODE_DIGITS,
 } from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { hashToken, randomToken } from "@/lib/security";
 
+const PAIRING_CODE_MAX = 10 ** PAIRING_CODE_DIGITS;
+const PAIRING_CODE_INSERT_ATTEMPTS = 32;
+
 function createClaimCode() {
-  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+  return String(randomInt(0, PAIRING_CODE_MAX)).padStart(PAIRING_CODE_DIGITS, "0");
 }
 
 export async function POST(request: Request) {
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
       );
     }
 
-    for (let attempt = 0; attempt < 12; attempt += 1) {
+    for (let attempt = 0; attempt < PAIRING_CODE_INSERT_ATTEMPTS; attempt += 1) {
       const claimCode = createClaimCode();
       const pollToken = randomToken();
       const { data, error } = await admin

@@ -1,5 +1,8 @@
 import type { PlayerManifest } from "@/lib/shared";
 import { getEnv } from "@/lib/env";
+import { serviceState } from "@/lib/entitlements";
+import { signedAdUrl } from "@/lib/media";
+import { isPlaylistItemActive } from "@/lib/schedule";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { bearerToken, hashToken, randomToken } from "@/lib/security";
 
@@ -59,11 +62,11 @@ export async function buildManifest(
 
   if (!screen) return null;
 
-  const [{ data: assignments }, { data: messages }, { data: settings }] =
+  const [{ data: assignments }, { data: messages }, { data: settings }, { data: organization }] =
     await Promise.all([
       admin
         .from("screen_ads")
-        .select("sort_order, ads!inner(*)")
+        .select("*, ads!inner(*)")
         .eq("screen_id", screen.id)
         .eq("ads.status", "active")
         .order("sort_order"),
@@ -81,7 +84,33 @@ export async function buildManifest(
         .select("*")
         .eq("organization_id", screen.organization_id)
         .single(),
+      admin
+        .from("organizations")
+        .select("*")
+        .eq("id", screen.organization_id)
+        .single(),
     ]);
+  const suspended = !organization || serviceState(organization) === "suspended";
+  const activeAssignments = suspended
+    ? []
+    : (assignments ?? []).filter((assignment: any) =>
+        isPlaylistItemActive(
+          assignment,
+          new Date(),
+          organization.timezone,
+        ),
+      );
+  const ads = await Promise.all(
+    activeAssignments.map(async (assignment: any) => ({
+      id: assignment.ads.id,
+      type: assignment.ads.type,
+      title: assignment.ads.title,
+      mediaUrl: await signedAdUrl(assignment.ads.media_path),
+      duration: assignment.duration ?? assignment.ads.duration,
+      sortOrder: assignment.sort_order,
+      checksum: assignment.ads.checksum,
+    })),
+  );
 
   const qrCodeUrl =
     includeQr && screen.show_qr_code
@@ -90,10 +119,15 @@ export async function buildManifest(
 
   return {
     schemaVersion: 1,
+    serviceStatus: suspended
+      ? "suspended"
+      : organization.status === "grace"
+        ? "grace"
+        : "active",
     screenId: screen.id,
     screenCode: screen.screen_code,
-    name: screen.name,
-    mode: screen.mode,
+    name: suspended ? "Subscription inactive" : screen.name,
+    mode: suspended ? "ad_only" : screen.mode,
     layout: "fullscreen_v1",
     orientation: screen.orientation,
     contentVersion: Number(screen.current_content_version),
@@ -104,18 +138,10 @@ export async function buildManifest(
       bulletinBlockSeconds: screen.bulletin_block_seconds,
       defaultMessageDuration: settings?.default_message_duration ?? 12,
     },
-    ads: (assignments ?? []).map((assignment: any) => ({
-      id: assignment.ads.id,
-      type: assignment.ads.type,
-      title: assignment.ads.title,
-      mediaUrl: assignment.ads.media_url,
-      duration: assignment.ads.duration,
-      sortOrder: assignment.sort_order,
-      checksum: assignment.ads.checksum,
-    })),
+    ads,
     bulletin: {
-      qrCodeUrl,
-      messages: (messages ?? []).map((message: any) => ({
+      qrCodeUrl: suspended ? null : qrCodeUrl,
+      messages: suspended ? [] : (messages ?? []).map((message: any) => ({
         id: message.id,
         title: message.title,
         body: message.body,

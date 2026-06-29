@@ -40,6 +40,7 @@ export const playerBulletinSchema = z.object({
 
 export const playerManifestSchema = z.object({
   schemaVersion: z.literal(1),
+  serviceStatus: z.enum(["active", "grace", "suspended"]).default("active"),
   screenId: z.uuid(),
   screenCode: z.string(),
   name: z.string(),
@@ -62,13 +63,17 @@ export const playerManifestSchema = z.object({
 });
 export type PlayerManifest = z.infer<typeof playerManifestSchema>;
 
+export const PAIRING_CODE_DIGITS = 8;
+export const PAIRING_CODE_PATTERN = new RegExp(`^\\d{${PAIRING_CODE_DIGITS}}$`);
+export const pairingClaimCodeSchema = z.string().regex(PAIRING_CODE_PATTERN);
+
 export const createPairingSessionRequestSchema = z.object({
   deviceId: z.string().min(8).max(200),
   appVersion: z.string().min(1).max(40),
 });
 
 export const createPairingSessionResponseSchema = z.object({
-  claimCode: z.string().regex(/^\d{6}$/),
+  claimCode: pairingClaimCodeSchema,
   pollToken: z.string().min(32),
   expiresAt: z.iso.datetime(),
 });
@@ -98,17 +103,18 @@ export const adminClaimCodeSchema = z
   .string()
   .trim()
   .transform((value) => value.replace(/\s/g, ""))
-  .pipe(z.string().regex(/^\d{6}$/));
+  .pipe(pairingClaimCodeSchema);
 
 export function formatClaimCode(value: string): string {
-  const normalized = value.replace(/\D/g, "").slice(0, 6);
-  return normalized.length > 3
-    ? `${normalized.slice(0, 3)} ${normalized.slice(3)}`
+  const normalized = value.replace(/\D/g, "").slice(0, PAIRING_CODE_DIGITS);
+  const splitAt = PAIRING_CODE_DIGITS / 2;
+  return normalized.length > splitAt
+    ? `${normalized.slice(0, splitAt)} ${normalized.slice(splitAt)}`
     : normalized;
 }
 
 export const pendingPairingSessionSchema = z.object({
-  claimCode: z.string().regex(/^\d{6}$/),
+  claimCode: pairingClaimCodeSchema,
   pollToken: z.string().min(32),
   expiresAt: z.iso.datetime(),
 });

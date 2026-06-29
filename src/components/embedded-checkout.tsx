@@ -1,0 +1,29 @@
+"use client";
+
+import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import { createEmbeddedCheckout } from "@/app/dashboard/billing/actions";
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+);
+
+export function CheckoutEmbed({
+  interval,
+  quantity,
+}: {
+  interval: "month" | "year";
+  quantity: number;
+}) {
+  return (
+    <EmbeddedCheckoutProvider
+      stripe={stripePromise}
+      options={{
+        fetchClientSecret: () =>
+          createEmbeddedCheckout({ interval, quantity }),
+      }}
+    >
+      <EmbeddedCheckout />
+    </EmbeddedCheckoutProvider>
+  );
+}

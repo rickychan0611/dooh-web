@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      // uploadAd allows up to 100 MB; leave headroom for multipart overhead
+      bodySizeLimit: "105mb",
+    },
+  },
+  turbopack: {
+    root: process.cwd(),
+  },
   async headers() {
     const corsHeaders = [
       { key: "Access-Control-Allow-Origin", value: "*" },

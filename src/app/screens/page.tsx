@@ -2,13 +2,14 @@ import Link from "next/link";
 import { PublicAccountNav } from "@/components/public-account-nav";
 import { isConfigured } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serviceState } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
 export default async function PublicScreensPage() {
   const configured = isConfigured();
   const screens = configured
-    ? (await getSupabaseAdmin().from("screens").select("screen_code,name,location").eq("is_active", true).eq("public_directory_enabled", true).order("name")).data ?? []
+    ? ((await getSupabaseAdmin().from("screens").select("screen_code,name,location,community_access,organizations!inner(*)").eq("is_active", true).eq("public_directory_enabled", true).neq("community_access", "disabled").order("name")).data ?? []).filter((screen: any) => serviceState(screen.organizations) !== "suspended")
     : [];
   return (
     <main className="public-shell">

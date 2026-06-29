@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SubmissionForm } from "@/components/submission-form";
 import { requirePublicUser } from "@/lib/public-auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serviceState } from "@/lib/entitlements";
 
 export default async function SubmitPage({
   params,
@@ -15,8 +16,8 @@ export default async function SubmitPage({
   const { qr } = await searchParams;
   const returnTo = `/submit/${screenCode}${qr ? `?qr=${encodeURIComponent(qr)}` : ""}`;
   const user = await requirePublicUser(returnTo);
-  const { data: screen } = await getSupabaseAdmin().from("screens").select("screen_code,name,location").eq("screen_code", screenCode.toUpperCase()).eq("is_active", true).single();
-  if (!screen) notFound();
+  const { data: screen } = await getSupabaseAdmin().from("screens").select("screen_code,name,location,community_access,organizations!inner(*)").eq("screen_code", screenCode.toUpperCase()).eq("is_active", true).single();
+  if (!screen || screen.community_access === "disabled" || serviceState(screen.organizations) === "suspended") notFound();
   const { data: profile } = await getSupabaseAdmin()
     .from("user_profiles")
     .select("display_name,contact")

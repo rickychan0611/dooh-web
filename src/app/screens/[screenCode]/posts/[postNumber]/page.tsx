@@ -47,7 +47,7 @@ export default async function NumberedPostPage({
       <article className="post-detail-card">
         <Link href={directoryUrl} className="post-back-link">Back to all posts</Link>
         <div className="post-detail-number">#{post.post_number}</div>
-        <p className="eyebrow">{formatBulletinCategoryLabel(post.category)} · {post.screens.name}</p>
+        <p className="eyebrow">{formatBulletinCategoryLabel(post.category)} &middot; {post.screens.name}</p>
         <h1>{post.title}</h1>
         <p className="post-date">Posted {new Date(post.created_at).toLocaleString()}</p>
         <PostActions postId={post.id} initiallySaved={Boolean(saved)} signedIn={Boolean(user)} loginUrl={`/account/login?next=${encodeURIComponent(currentUrl)}`} />

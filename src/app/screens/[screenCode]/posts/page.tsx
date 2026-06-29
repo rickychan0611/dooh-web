@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { PublicAccountNav } from "@/components/public-account-nav";
 import { parsePostNumberSearch } from "@/lib/posts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { serviceState } from "@/lib/entitlements";
 
 const PAGE_SIZE = 20;
 
@@ -19,12 +20,16 @@ export default async function ScreenPostsPage({
   const admin = getSupabaseAdmin();
   const { data: screen } = await admin
     .from("screens")
-    .select("id,screen_code,name,location")
+    .select("id,screen_code,name,location,community_access,organizations!inner(*)")
     .eq("screen_code", screenCode.toUpperCase())
     .eq("is_active", true)
     .eq("public_directory_enabled", true)
     .maybeSingle();
   if (!screen) notFound();
+  if (
+    screen.community_access === "disabled" ||
+    serviceState(screen.organizations) === "suspended"
+  ) notFound();
 
   const searchedNumber = parsePostNumberSearch(query.q);
   if (searchedNumber) {
