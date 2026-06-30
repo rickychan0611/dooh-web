@@ -6,9 +6,23 @@ import { isPlaylistItemActive } from "@/lib/schedule";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { bearerToken, hashToken, randomToken } from "@/lib/security";
 
-export async function authenticateDevice(request: Request, screenCode: string) {
+export type DeviceAuthResult =
+  | { status: "ok"; device: Record<string, any> }
+  | { status: "revoked" }
+  | { status: "unauthorized" };
+
+/**
+ * Resolves a device token, distinguishing an explicit remote revoke
+ * (`revoked_at` set) from a generic authentication failure. Players use this
+ * distinction to stay paired through transient failures and only un-pair when
+ * the screen has actually been revoked from the dashboard.
+ */
+export async function resolveDeviceAuth(
+  request: Request,
+  screenCode: string,
+): Promise<DeviceAuthResult> {
   const token = bearerToken(request);
-  if (!token) return null;
+  if (!token) return { status: "unauthorized" };
 
   const admin = getSupabaseAdmin();
   const { data } = await admin
@@ -16,10 +30,16 @@ export async function authenticateDevice(request: Request, screenCode: string) {
     .select("*, screens!inner(id, screen_code, is_active)")
     .eq("token_hash", hashToken(token))
     .eq("screens.screen_code", screenCode.toUpperCase())
-    .is("revoked_at", null)
     .single();
 
-  return data ?? null;
+  if (!data) return { status: "unauthorized" };
+  if (data.revoked_at) return { status: "revoked" };
+  return { status: "ok", device: data };
+}
+
+export async function authenticateDevice(request: Request, screenCode: string) {
+  const result = await resolveDeviceAuth(request, screenCode);
+  return result.status === "ok" ? result.device : null;
 }
 
 export async function createQrSession(screenId: string, screenCode: string) {

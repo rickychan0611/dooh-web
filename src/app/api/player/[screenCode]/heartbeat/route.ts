@@ -1,6 +1,6 @@
 import { heartbeatRequestSchema } from "@/lib/shared";
 import { apiError, handleApiError } from "@/lib/http";
-import { authenticateDevice } from "@/lib/player";
+import { resolveDeviceAuth } from "@/lib/player";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(
@@ -9,8 +9,14 @@ export async function POST(
 ) {
   try {
     const { screenCode } = await context.params;
-    const device = await authenticateDevice(request, screenCode);
-    if (!device) return apiError("UNAUTHORIZED", "Invalid device token.", 401);
+    const auth = await resolveDeviceAuth(request, screenCode);
+    if (auth.status === "revoked") {
+      return apiError("DEVICE_REVOKED", "This screen has been unpaired.", 403);
+    }
+    if (auth.status !== "ok") {
+      return apiError("UNAUTHORIZED", "Invalid device token.", 401);
+    }
+    const device = auth.device;
     const input = heartbeatRequestSchema.parse(await request.json());
     if (input.deviceId !== device.device_id) {
       return apiError("DEVICE_MISMATCH", "Device identity does not match token.", 403);

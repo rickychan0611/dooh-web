@@ -1,5 +1,5 @@
 import { apiError, handleApiError } from "@/lib/http";
-import { authenticateDevice, buildManifest } from "@/lib/player";
+import { buildManifest, resolveDeviceAuth } from "@/lib/player";
 
 export async function GET(
   request: Request,
@@ -7,8 +7,13 @@ export async function GET(
 ) {
   try {
     const { screenCode } = await context.params;
-    const device = await authenticateDevice(request, screenCode);
-    if (!device) return apiError("UNAUTHORIZED", "Invalid device token.", 401);
+    const auth = await resolveDeviceAuth(request, screenCode);
+    if (auth.status === "revoked") {
+      return apiError("DEVICE_REVOKED", "This screen has been unpaired.", 403);
+    }
+    if (auth.status !== "ok") {
+      return apiError("UNAUTHORIZED", "Invalid device token.", 401);
+    }
 
     const manifest = await buildManifest(screenCode);
     if (!manifest) return apiError("SCREEN_NOT_FOUND", "Screen is unavailable.", 404);
