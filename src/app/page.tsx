@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
-import { CalendarClock, Cloud, LayoutGrid } from "lucide-react";
+import { CalendarClock, Cloud, Download, LayoutGrid, Monitor } from "lucide-react";
 import { HeroStackSlider } from "@/components/hero-stack-slider";
 import { MarketingNav } from "@/components/marketing-nav";
 
@@ -42,6 +42,7 @@ export default function HomePage() {
   const slides = getSlideImages();
   const apkDownloadUrl = process.env.NEXT_PUBLIC_PLAYER_APK_URL || "/downloads/player.apk";
   const apkIsExternal = apkDownloadUrl.startsWith("http");
+  const webPlayerUrl = process.env.NEXT_PUBLIC_WEB_PLAYER_URL || "https://dooh-player.netlify.app/";
   return (
     <main>
       <MarketingNav />
@@ -53,8 +54,33 @@ export default function HomePage() {
             <span className="hero-accent">Easily.</span>
           </h1>
           <p className="hero-copy">Upload images and videos, schedule promotions in seconds, and optionally give your customers a moderated community board.</p>
-          <div className="actions"><Link className="button" href="/signup">Start 14 days free</Link><a className="apk-download-button" href={apkDownloadUrl} {...(apkIsExternal ? { target: "_blank", rel: "noopener noreferrer" } : { download: true })}><img src="/android-download-apk.png" alt="Download Android APK" /></a></div>
+          <div className="actions">
+            <Link className="button hero-action-button" href="/signup">Start 14 days free</Link>
+          </div>
           <p className="microcopy">No credit card · One screen included · Cancel anytime</p>
+          <div className="player-actions">
+            <a
+              className="player-action-button hero-action-button"
+              href={webPlayerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="player-action-icon" aria-hidden>
+                <Monitor size={15} strokeWidth={2} />
+              </span>
+              Web Player
+            </a>
+            <a
+              className="player-action-button hero-action-button"
+              href={apkDownloadUrl}
+              {...(apkIsExternal ? { target: "_blank", rel: "noopener noreferrer" } : { download: true })}
+            >
+              <span className="player-action-icon" aria-hidden>
+                <Download size={15} strokeWidth={2} />
+              </span>
+              Download APK
+            </a>
+          </div>
         </div>
         <div className="hero-visual">
           <HeroStackSlider images={slides} />
