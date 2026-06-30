@@ -309,6 +309,42 @@ export async function assignAd(formData: FormData) {
     metadata: { adId },
   });
   revalidatePath(`/dashboard/screens/${screenId}`);
+  revalidatePath("/dashboard/media");
+}
+
+export async function assignAdToScreen(adId: string, screenId: string) {
+  const { organizationId, user } = await requireEditor();
+  await Promise.all([
+    assertScreen(screenId, organizationId),
+    assertAd(adId, organizationId),
+  ]);
+  const admin = getSupabaseAdmin();
+  const { data: lastItem } = await admin
+    .from("screen_ads")
+    .select("sort_order")
+    .eq("screen_id", screenId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { error } = await admin.from("screen_ads").upsert(
+    {
+      screen_id: screenId,
+      ad_id: adId,
+      sort_order: (lastItem?.sort_order ?? -1) + 1,
+    },
+    { onConflict: "screen_id,ad_id" },
+  );
+  if (error) throw error;
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    action: "playlist.item_assigned",
+    targetType: "screen",
+    targetId: screenId,
+    metadata: { adId, source: "media_library" },
+  });
+  revalidatePath(`/dashboard/screens/${screenId}`);
+  revalidatePath("/dashboard/media");
 }
 
 export async function assignAdToScreens(formData: FormData) {
@@ -453,6 +489,7 @@ export async function unassignAd(screenId: string, adId: string) {
     metadata: { adId },
   });
   revalidatePath(`/dashboard/screens/${screenId}`);
+  revalidatePath("/dashboard/media");
 }
 
 export async function moderateMessage(formData: FormData) {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { CreateScreenPanel } from "@/components/create-screen-panel";
 import { requireAdmin } from "@/lib/auth";
 import { whenDevBypass } from "@/lib/dev-bypass";
@@ -50,18 +51,51 @@ export default async function ScreensPage({
           </p>
         </section>
       )}
-      <div className="card-grid">
-        {(screens).map((screen: any) => {
-          const online = screen.last_heartbeat_at && Date.now() - new Date(screen.last_heartbeat_at).getTime() < 5 * 60_000;
-          return (
-            <Link className="panel screen-card" href={`/dashboard/screens/${screen.id}`} key={screen.id}>
-              <span className={`badge ${online ? "success" : ""}`}>{online ? "Online" : "Offline"}</span>
-              <h2>{screen.name}</h2><p>{screen.location || "No location"}</p>
-              <code>{screen.screen_code}</code><span>{screen.mode.replaceAll("_", " ")}</span>
-            </Link>
-          );
-        })}
-      </div>
+      {screens.length > 0 && (
+        <section className="panel table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="col-status">Status</th>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Screen ID</th>
+                <th>Mode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {screens.map((screen: any) => {
+                const online =
+                  screen.last_heartbeat_at &&
+                  Date.now() - new Date(screen.last_heartbeat_at).getTime() < 5 * 60_000;
+                return (
+                  <tr key={screen.id}>
+                    <td>
+                      <span className={`badge ${online ? "success" : ""}`}>
+                        {online ? "Online" : "Offline"}
+                      </span>
+                    </td>
+                    <td>
+                      <Link
+                        href={`/dashboard/screens/${screen.id}`}
+                        className="table-link"
+                      >
+                        {screen.name}
+                        <ArrowUpRight aria-hidden />
+                      </Link>
+                    </td>
+                    <td>{screen.location || "No location"}</td>
+                    <td>
+                      <code>{screen.screen_code}</code>
+                    </td>
+                    <td>{screen.mode.replaceAll("_", " ")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
     </>
   );
 }

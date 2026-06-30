@@ -4,7 +4,23 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAd } from "@/app/dashboard/actions";
 
-export function UploadMediaModal({ screenId }: { screenId: string }) {
+type UploadMediaModalProps = {
+  screenId?: string;
+  buttonLabel?: string;
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+};
+
+export function UploadMediaModal({
+  screenId,
+  buttonLabel = screenId ? "Upload media" : "Add media",
+  title = screenId ? "Add media to this screen" : "Upload media",
+  description = screenId
+    ? "The file is saved to your library and added to this playlist."
+    : "The file is saved to your media library.",
+  submitLabel = screenId ? "Upload and add" : "Upload",
+}: UploadMediaModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -35,15 +51,15 @@ export function UploadMediaModal({ screenId }: { screenId: string }) {
   return (
     <>
       <button className="button secondary compact-button" type="button" onClick={open}>
-        Upload media
+        {buttonLabel}
       </button>
       <dialog ref={dialogRef} className="media-modal" onClose={() => setError(null)}>
         <form action={handleSubmit} className="stack media-modal-form">
           <div className="media-modal-header">
             <div>
               <p className="eyebrow">Upload</p>
-              <h2>Add media to this screen</h2>
-              <p className="muted">The file is saved to your library and added to this playlist.</p>
+              <h2>{title}</h2>
+              <p className="muted">{description}</p>
             </div>
             <button
               className="button secondary compact-button"
@@ -54,7 +70,7 @@ export function UploadMediaModal({ screenId }: { screenId: string }) {
               Close
             </button>
           </div>
-          <input type="hidden" name="screenId" value={screenId} />
+          {screenId && <input type="hidden" name="screenId" value={screenId} />}
           <label>
             Title
             <input name="title" required disabled={pending} />
@@ -76,7 +92,7 @@ export function UploadMediaModal({ screenId }: { screenId: string }) {
           {error && <p className="notice danger">{error}</p>}
           <div className="actions">
             <button className="button" type="submit" disabled={pending}>
-              {pending ? "Uploading…" : "Upload and add"}
+              {pending ? "Uploading…" : submitLabel}
             </button>
           </div>
         </form>

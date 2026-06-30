@@ -34,7 +34,7 @@ export default async function ScreenDetailPage({
 }) {
   const { organizationId, organization } = await requireAdmin();
   const { id } = await params;
-  const { pairing, tab = "content" } = await searchParams;
+  const { pairing, tab = "connect" } = await searchParams;
   const screen = await whenDevBypass(null as any, async () => {
     const { data } = await getSupabaseAdmin()
       .from("screens")
@@ -75,9 +75,9 @@ export default async function ScreenDetailPage({
   const activeDevice = devices.find((device: any) => !device.revoked_at);
   const online = screen.last_heartbeat_at && Date.now() - new Date(screen.last_heartbeat_at).getTime() < 300000;
   const tabs = [
+    ["connect", "Connect"],
     ["content", "Content"],
     ["community", `Community${pendingPosts ? ` (${pendingPosts})` : ""}`],
-    ["device", "Device"],
     ["settings", "Settings"],
   ];
 
@@ -116,7 +116,7 @@ export default async function ScreenDetailPage({
         <section className="panel"><h2>Moderation</h2><p className="muted">{pendingPosts} post{pendingPosts === 1 ? "" : "s"} waiting for review.</p><div className="actions"><Link className="button" href={`/dashboard/messages?screen=${screen.id}`}>Manage posts</Link><Link className="button secondary" href="/dashboard/community">Manage members</Link></div></section>
       </div>}
 
-      {tab === "device" && <div className="two-column">
+      {tab === "connect" && <div className="two-column">
         <section className="panel"><h2>Connect a TV or browser</h2><p className="muted">Open the DOOH player, then enter its single-use eight-digit code. Connecting a new player replaces any previous player on this screen. With one screen license, only one screen can stay connected at a time.</p>{pairing && pairingMessages[pairing] && <p className={`notice ${pairingMessages[pairing].danger ? "danger" : "success"}`}>{pairingMessages[pairing].text}</p>}<form action={claimPlayer} className="inline-form"><input type="hidden" name="screenId" value={screen.id} /><input name="claimCode" inputMode="numeric" pattern="[0-9 ]{8,11}" maxLength={11} placeholder="1234 5678" required /><button className="button">Connect</button></form></section>
         <section className="panel"><h2>Screen health</h2>{activeDevice ? <div className="list"><div className="list-row"><div><strong>{online ? "Online" : "Offline"}</strong><p>Last heartbeat {screen.last_heartbeat_at ? new Date(screen.last_heartbeat_at).toLocaleString() : "never"}</p></div><span className={`badge ${online ? "success" : "warning"}`}>{activeDevice.app_version}</span></div><div className="list-row"><div><strong>Current item</strong><p>{activeDevice.current_item_id || "None reported"}</p></div></div><div className="list-row"><div><strong>Storage free</strong><p>{activeDevice.free_storage_mb ?? "Unknown"} MB</p></div></div><form action={revokeDevice}><input type="hidden" name="screenId" value={screen.id} /><input type="hidden" name="deviceId" value={activeDevice.id} /><button className="button danger">Revoke player</button></form></div> : <p className="muted">No player connected.</p>}</section>
       </div>}

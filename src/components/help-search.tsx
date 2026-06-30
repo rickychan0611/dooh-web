@@ -58,15 +58,20 @@ export function HelpSearch() {
           placeholder="Try pairing, offline, schedule..."
         />
       </label>
-      <section className="feature-grid help-results">
+      <div className="faq help-results">
         {matches.map((article, index) => (
-          <article className="panel" key={article.title}>
-            <h2>{index < 4 && !query ? `${index + 1}. ` : ""}{article.title}</h2>
+          <details key={article.title}>
+            <summary>
+              {index < 4 && !query ? `${index + 1}. ` : ""}
+              {article.title}
+            </summary>
             <p>{article.body}</p>
-          </article>
+          </details>
         ))}
-        {!matches.length && <article className="panel"><h2>No matching article</h2><p>Try a shorter search such as pairing, screen, or schedule.</p></article>}
-      </section>
+        {!matches.length && (
+          <p className="muted help-empty">No matching article. Try a shorter search such as pairing, screen, or schedule.</p>
+        )}
+      </div>
     </>
   );
 }
