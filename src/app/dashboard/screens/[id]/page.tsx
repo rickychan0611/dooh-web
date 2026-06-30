@@ -8,6 +8,7 @@ import {
   updateScreen,
 } from "@/app/dashboard/actions";
 import { PlaylistEditor } from "@/components/playlist-editor";
+import { UploadMediaModal } from "@/components/upload-media-modal";
 import { requireAdmin } from "@/lib/auth";
 import { whenDevBypass } from "@/lib/dev-bypass";
 import { withSignedAdUrl } from "@/lib/media";
@@ -90,7 +91,7 @@ export default async function ScreenDetailPage({
 
       {tab === "content" && <>
         <section className="panel compact-create-panel">
-          <div className="panel-heading"><div><p className="eyebrow">Playlist</p><h2>Add media</h2></div><Link className="button secondary compact-button" href="/dashboard/ads">Upload media</Link></div>
+          <div className="panel-heading"><div><p className="eyebrow">Playlist</p><h2>Add media</h2></div><UploadMediaModal screenId={screen.id} /></div>
           <form action={assignAd} className="inline-form"><input type="hidden" name="screenId" value={screen.id} /><select name="adId" required><option value="">Choose an image or video</option>{assets.map((asset: any) => <option key={asset.id} value={asset.id}>{asset.title}</option>)}</select><button className="button">Add to playlist</button></form>
         </section>
         <PlaylistEditor screenId={screen.id} initialItems={assignments.map((item: any) => ({

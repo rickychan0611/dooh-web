@@ -249,7 +249,37 @@ export async function uploadAd(formData: FormData) {
     targetId: inserted.id,
     metadata: { bytes: file.size, mimeType: file.type },
   });
-  revalidatePath("/dashboard/ads");
+
+  const screenId = text(formData, "screenId");
+  if (screenId) {
+    await assertScreen(screenId, organizationId);
+    const { data: lastItem } = await admin
+      .from("screen_ads")
+      .select("sort_order")
+      .eq("screen_id", screenId)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { error: assignError } = await admin.from("screen_ads").upsert(
+      {
+        screen_id: screenId,
+        ad_id: inserted.id,
+        sort_order: (lastItem?.sort_order ?? -1) + 1,
+      },
+      { onConflict: "screen_id,ad_id" },
+    );
+    if (assignError) throw assignError;
+    await writeAudit({
+      organizationId,
+      actorUserId: user.id,
+      action: "playlist.item_assigned",
+      targetType: "screen",
+      targetId: screenId,
+      metadata: { adId: inserted.id, source: "upload" },
+    });
+    revalidatePath(`/dashboard/screens/${screenId}`);
+  }
+
   revalidatePath("/dashboard/media");
 }
 
@@ -348,7 +378,61 @@ export async function duplicateAd(formData: FormData) {
     metadata: { sourceAdId: adId },
   });
   revalidatePath("/dashboard/media");
-  revalidatePath("/dashboard/ads");
+}
+
+export async function deleteAd(formData: FormData) {
+  const { organizationId, user } = await requireEditor();
+  const adId = text(formData, "adId");
+  await assertAd(adId, organizationId);
+  const admin = getSupabaseAdmin();
+  const { data: ad, error: adError } = await admin
+    .from("ads")
+    .select("media_path")
+    .eq("id", adId)
+    .eq("organization_id", organizationId)
+    .single();
+  if (adError) throw adError;
+
+  const { data: assignments } = await admin
+    .from("screen_ads")
+    .select("screen_id")
+    .eq("ad_id", adId);
+
+  const { error: unassignError } = await admin
+    .from("screen_ads")
+    .delete()
+    .eq("ad_id", adId);
+  if (unassignError) throw unassignError;
+
+  const { error: deleteError } = await admin
+    .from("ads")
+    .update({ status: "deleted" })
+    .eq("id", adId)
+    .eq("organization_id", organizationId);
+  if (deleteError) throw deleteError;
+
+  if (ad.media_path) {
+    const { count } = await admin
+      .from("ads")
+      .select("id", { count: "exact", head: true })
+      .eq("media_path", ad.media_path)
+      .neq("status", "deleted");
+    if (!count) {
+      await admin.storage.from("ad-media").remove([ad.media_path]);
+    }
+  }
+
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    action: "media.deleted",
+    targetType: "ad",
+    targetId: adId,
+  });
+  revalidatePath("/dashboard/media");
+  for (const assignment of assignments ?? []) {
+    revalidatePath(`/dashboard/screens/${assignment.screen_id}`);
+  }
 }
 
 export async function unassignAd(screenId: string, adId: string) {

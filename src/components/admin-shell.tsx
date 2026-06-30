@@ -6,7 +6,6 @@ import { requireOrganization } from "@/lib/auth";
 const links = [
   ["/dashboard", "Overview"],
   ["/dashboard/screens", "Screens"],
-  ["/dashboard/ads", "Ads"],
   ["/dashboard/media", "Media"],
   ["/dashboard/community", "Community"],
   ["/dashboard/team", "Team"],

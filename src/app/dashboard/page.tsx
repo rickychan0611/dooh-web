@@ -69,7 +69,7 @@ export default async function DashboardPage({
         <div className="panel-heading"><div><p className="eyebrow">Getting started</p><h2>Launch your first screen</h2></div><span className="badge">{[Boolean(screens.count), Boolean(ads.count), Boolean(paired.count), Boolean(online.count)].filter(Boolean).length}/4 complete</span></div>
         <div className="onboarding-steps">
           <Link href="/dashboard/screens"><span>{screens.count ? "✓" : "1"}</span><div><strong>Create a screen</strong><p>Name the TV or browser you want to manage.</p></div></Link>
-          <Link href="/dashboard/ads"><span>{ads.count ? "✓" : "2"}</span><div><strong>Upload content</strong><p>Add your first image or video promotion.</p></div></Link>
+          <Link href="/dashboard/media"><span>{ads.count ? "✓" : "2"}</span><div><strong>Upload content</strong><p>Add your first image or video promotion.</p></div></Link>
           <Link href="/dashboard/screens"><span>{paired.count ? "✓" : "3"}</span><div><strong>Enter the pairing code</strong><p>Connect one player to the screen license.</p></div></Link>
           <Link href="/dashboard/screens"><span>{online.count ? "✓" : "4"}</span><div><strong>Verify it is online</strong><p>Confirm the player is syncing and reporting health.</p></div></Link>
         </div>

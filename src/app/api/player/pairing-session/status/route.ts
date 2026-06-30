@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return Response.json(
       pairingSessionStatusResponseSchema.parse({
         status: "pending",
-        expiresAt: session.expires_at,
+        expiresAt: new Date(session.expires_at).toISOString(),
       }),
     );
   } catch (error) {
