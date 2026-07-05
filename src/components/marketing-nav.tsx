@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { MarketingNavState } from "@/lib/auth";
 
 const navLinks = [
   { href: "#features", label: "Features", anchor: true },
@@ -11,7 +12,60 @@ const navLinks = [
   { href: "/help", label: "Help", anchor: false },
 ] as const;
 
-export function MarketingNav() {
+function NavActions({
+  navState,
+  onNavigate,
+}: {
+  navState: MarketingNavState;
+  onNavigate?: () => void;
+}) {
+  if (!navState.isLoggedIn) {
+    return (
+      <>
+        <Link
+          className="button secondary compact-button"
+          href="/login"
+          onClick={onNavigate}
+        >
+          Sign in
+        </Link>
+        <Link className="button compact-button" href="/signup" onClick={onNavigate}>
+          Start free
+        </Link>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {navState.showDashboard && (
+        <Link className="button compact-button" href="/dashboard" onClick={onNavigate}>
+          Dashboard
+        </Link>
+      )}
+      {navState.showOwnerConsole && (
+        <Link
+          className="button secondary compact-button"
+          href="/owner"
+          onClick={onNavigate}
+        >
+          Admin panel
+        </Link>
+      )}
+      {!navState.showDashboard && !navState.showOwnerConsole && (
+        <Link
+          className="button compact-button"
+          href="/account/profile"
+          onClick={onNavigate}
+        >
+          My account
+        </Link>
+      )}
+    </>
+  );
+}
+
+export function MarketingNav({ navState }: { navState: MarketingNavState }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -52,12 +106,7 @@ export function MarketingNav() {
           )}
         </nav>
         <div className="marketing-nav-actions actions">
-          <Link className="button secondary compact-button" href="/login">
-            Sign in
-          </Link>
-          <Link className="button compact-button" href="/signup">
-            Start free
-          </Link>
+          <NavActions navState={navState} />
         </div>
         <button
           type="button"
@@ -72,8 +121,19 @@ export function MarketingNav() {
       </header>
 
       <div className={`marketing-nav-overlay${open ? " open" : ""}`} aria-hidden={!open}>
-        <button type="button" className="marketing-nav-backdrop" aria-label="Close menu" onClick={close} tabIndex={open ? 0 : -1} />
-        <aside id="marketing-nav-panel" className="marketing-nav-panel" aria-hidden={!open} inert={open ? undefined : true}>
+        <button
+          type="button"
+          className="marketing-nav-backdrop"
+          aria-label="Close menu"
+          onClick={close}
+          tabIndex={open ? 0 : -1}
+        />
+        <aside
+          id="marketing-nav-panel"
+          className="marketing-nav-panel"
+          aria-hidden={!open}
+          inert={open ? undefined : true}
+        >
           <nav aria-label="Main">
             {navLinks.map(({ href, label, anchor }) =>
               anchor ? (
@@ -88,12 +148,7 @@ export function MarketingNav() {
             )}
           </nav>
           <div className="actions">
-            <Link className="button secondary compact-button" href="/login" onClick={close}>
-              Sign in
-            </Link>
-            <Link className="button compact-button" href="/signup" onClick={close}>
-              Start free
-            </Link>
+            <NavActions navState={navState} onNavigate={close} />
           </div>
         </aside>
       </div>

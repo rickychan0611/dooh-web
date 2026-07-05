@@ -114,7 +114,7 @@ export async function GET(request: Request) {
             to: ownerEmail,
             subject: `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in your DOOH Community trial`,
             heading: "Keep your screen running",
-            body: `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}. Choose monthly or annual billing before it ends.`,
+            body: `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}. Start the monthly plan before it ends to keep your screens running.`,
             actionUrl: `${getEnv().NEXT_PUBLIC_APP_URL}/dashboard/billing`,
             actionLabel: "Choose a plan",
             idempotencyKey: `${action}-${organization.id}`,

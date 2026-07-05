@@ -9,10 +9,8 @@ const stripePromise = loadStripe(
 );
 
 export function CheckoutEmbed({
-  interval,
   quantity,
 }: {
-  interval: "month" | "year";
   quantity: number;
 }) {
   return (
@@ -20,7 +18,7 @@ export function CheckoutEmbed({
       stripe={stripePromise}
       options={{
         fetchClientSecret: () =>
-          createEmbeddedCheckout({ interval, quantity }),
+          createEmbeddedCheckout({ quantity }),
       }}
     >
       <EmbeddedCheckout />

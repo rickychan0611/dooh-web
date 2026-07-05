@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { getEnv } from "@/lib/env";
+import { getEnv } from "./env";
 
 let stripeClient: Stripe | null = null;
 
@@ -10,19 +10,21 @@ export function getStripe() {
   return stripeClient;
 }
 
-export function stripePriceId(
-  currency: "cad" | "usd",
-  interval: "month" | "year",
-) {
+export const INCLUDED_SCREENS = 3;
+export const BASE_MONTHLY_PRICE = 9;
+export const EXTRA_SCREEN_MONTHLY_PRICE = 3;
+export const REFUND_WINDOW_DAYS = 7;
+
+export function monthlySubscriptionAmount(quantity: number) {
+  const screens = Math.max(1, Math.trunc(quantity));
+  return BASE_MONTHLY_PRICE + Math.max(0, screens - INCLUDED_SCREENS) * EXTRA_SCREEN_MONTHLY_PRICE;
+}
+
+export function stripeMonthlyPriceId(currency: "cad" | "usd") {
   const env = getEnv();
-  const key = `${currency}:${interval}`;
-  const prices: Record<string, string> = {
-    "cad:month": env.STRIPE_PRICE_CAD_MONTHLY,
-    "cad:year": env.STRIPE_PRICE_CAD_YEARLY,
-    "usd:month": env.STRIPE_PRICE_USD_MONTHLY,
-    "usd:year": env.STRIPE_PRICE_USD_YEARLY,
-  };
-  const priceId = prices[key];
-  if (!priceId) throw new Error(`Stripe price ${key} is not configured.`);
+  const priceId =
+    env.STRIPE_PRICE_MONTHLY ||
+    (currency === "usd" ? env.STRIPE_PRICE_USD_MONTHLY : env.STRIPE_PRICE_CAD_MONTHLY);
+  if (!priceId) throw new Error("Stripe monthly tiered price is not configured.");
   return priceId;
 }

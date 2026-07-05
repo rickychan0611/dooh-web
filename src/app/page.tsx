@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CalendarClock, Cloud, Download, LayoutGrid, Monitor } from "lucide-react";
 import { HeroStackSlider } from "@/components/hero-stack-slider";
 import { MarketingNav } from "@/components/marketing-nav";
+import { getMarketingNavState } from "@/lib/auth";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".svg"]);
 
@@ -38,14 +39,15 @@ const highlights = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const navState = await getMarketingNavState();
   const slides = getSlideImages();
   const apkDownloadUrl = process.env.NEXT_PUBLIC_PLAYER_APK_URL || "/downloads/player.apk";
   const apkIsExternal = apkDownloadUrl.startsWith("http");
   const webPlayerUrl = process.env.NEXT_PUBLIC_WEB_PLAYER_URL || "https://dooh-player.netlify.app/";
   return (
     <main>
-      <MarketingNav />
+      <MarketingNav navState={navState} />
       <section className="marketing-hero">
         <div className="hero-content">
           <p className="eyebrow">Digital signage plus community</p>
@@ -55,9 +57,19 @@ export default function HomePage() {
           </h1>
           <p className="hero-copy">Upload images and videos, schedule promotions in seconds, and optionally give your customers a moderated community board.</p>
           <div className="actions">
-            <Link className="button hero-action-button" href="/signup">Start 14 days free</Link>
+            {!navState.isLoggedIn && (
+              <Link className="button hero-action-button" href="/signup">Start 14 days free</Link>
+            )}
+            {navState.showDashboard && (
+              <Link className="button hero-action-button" href="/dashboard">Dashboard</Link>
+            )}
+            {navState.showOwnerConsole && (
+              <Link className="button secondary hero-action-button" href="/owner">Admin panel</Link>
+            )}
           </div>
-          <p className="microcopy">No credit card · One screen included · Cancel anytime</p>
+          {!navState.isLoggedIn && (
+            <p className="microcopy">No credit card · $9/month includes up to 3 screens · Cancel anytime</p>
+          )}
           <div className="player-actions">
             <a
               className="player-action-button hero-action-button"
@@ -119,8 +131,24 @@ export default function HomePage() {
         <div className="steps"><article><span>1</span><h3>Create a screen</h3><p>Name it and choose promotions, community posts, or both.</p></article><article><span>2</span><h3>Add your content</h3><p>Upload media, set the order and schedule, then switch items on.</p></article><article><span>3</span><h3>Enter the code</h3><p>Pair one browser or TV player and watch the screen update.</p></article></div>
       </section>
       <section className="marketing-section pricing-callout">
-        <div><p className="eyebrow">Simple pricing</p><h2>One complete plan. Pay only for active screens.</h2><p>US$6 or CA$9 per screen each month. Annual billing includes free Android TV stick.</p></div>
-        <div className="actions"><Link className="button" href="/signup">Start free trial</Link><Link className="button secondary" href="/pricing">View pricing</Link></div>
+        <div><p className="eyebrow">Simple pricing</p><h2>One complete monthly plan.</h2><p>$9/month includes up to 3 active screens. Extra screens are $3/month each.</p></div>
+        <div className="actions">
+          {!navState.isLoggedIn ? (
+            <>
+              <Link className="button" href="/signup">Start free trial</Link>
+              <Link className="button secondary" href="/pricing">View pricing</Link>
+            </>
+          ) : (
+            <>
+              {navState.showDashboard && (
+                <Link className="button" href="/dashboard">Dashboard</Link>
+              )}
+              {navState.showOwnerConsole && (
+                <Link className="button secondary" href="/owner">Admin panel</Link>
+              )}
+            </>
+          )}
+        </div>
       </section>
       <footer className="marketing-footer"><Link href="/">DOOH Community</Link><nav><Link href="/pricing">Pricing</Link><Link href="/help">Help</Link><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/acceptable-use">Acceptable use</Link></nav></footer>
     </main>

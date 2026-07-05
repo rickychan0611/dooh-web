@@ -12,9 +12,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export default async function MediaPage() {
   const { organizationId } = await requireAdmin();
-  const [data, screens] = await whenDevBypass([[] as any[], [] as any[]], async () => {
+  const [data, screens, viewRows] = await whenDevBypass([[] as any[], [] as any[], [] as any[]], async () => {
     const admin = getSupabaseAdmin();
-    const [{ data: ads }, { data: screenRows }] = await Promise.all([
+    const [{ data: ads }, { data: screenRows }, { data: views }] = await Promise.all([
       admin
         .from("ads")
         .select("id,title,type,media_path,file_size,mime_type,duration,screen_ads(screen_id)")
@@ -27,10 +27,22 @@ export default async function MediaPage() {
         .eq("organization_id", organizationId)
         .eq("is_active", true)
         .order("name"),
+      admin
+        .from("ad_playback_view_counts")
+        .select("ad_id,total_views,views_7d,views_30d")
+        .eq("organization_id", organizationId),
     ]);
-    return [ads ?? [], screenRows ?? []];
+    return [ads ?? [], screenRows ?? [], views ?? []];
   });
   const ads = await Promise.all(data.map(withSignedAdUrl));
+  const viewCounts = new Map<string, { total: number; seven: number; thirty: number }>();
+  for (const row of viewRows ?? []) {
+    const current = viewCounts.get(row.ad_id) ?? { total: 0, seven: 0, thirty: 0 };
+    current.total += Number(row.total_views ?? 0);
+    current.seven += Number(row.views_7d ?? 0);
+    current.thirty += Number(row.views_30d ?? 0);
+    viewCounts.set(row.ad_id, current);
+  }
 
   return (
     <>
@@ -50,12 +62,15 @@ export default async function MediaPage() {
               <th>Type</th>
               <th>Size</th>
               <th>Usage</th>
+              <th>Views</th>
               <th>Assign to screens</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {(ads ?? []).map((ad: any) => (
+            {(ads ?? []).map((ad: any) => {
+              const views = viewCounts.get(ad.id) ?? { total: 0, seven: 0, thirty: 0 };
+              return (
               <tr key={ad.id}>
                 <td>
                   <a
@@ -87,6 +102,7 @@ export default async function MediaPage() {
                 <td>{ad.mime_type ?? ad.type}</td>
                 <td>{Math.round((ad.file_size ?? 0) / 1024)} KB</td>
                 <td>{ad.screen_ads?.length ?? 0} screens</td>
+                <td>{views.total} total<br /><span className="muted">{views.seven} 7d · {views.thirty} 30d</span></td>
                 <td>
                   <MediaScreenAssignForm
                     adId={ad.id}
@@ -114,7 +130,7 @@ export default async function MediaPage() {
                   </div>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </section>

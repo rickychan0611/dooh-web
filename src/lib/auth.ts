@@ -48,6 +48,72 @@ function platformOwnerEmails() {
     .filter(Boolean);
 }
 
+async function isPlatformOwnerUser(user: {
+  id: string | null;
+  email?: string | null;
+}) {
+  if (!user.email) return false;
+  if (platformOwnerEmails().includes(user.email.toLowerCase())) return true;
+  if (!user.id) return false;
+  const { data } = await getSupabaseAdmin()
+    .from("platform_owners")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export type MarketingNavState = {
+  isLoggedIn: boolean;
+  showDashboard: boolean;
+  showOwnerConsole: boolean;
+};
+
+export async function getMarketingNavState(): Promise<MarketingNavState> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      isLoggedIn: false,
+      showDashboard: false,
+      showOwnerConsole: false,
+    };
+  }
+
+  if (isDevAuthBypassEnabled()) {
+    return {
+      isLoggedIn: true,
+      showDashboard: true,
+      showOwnerConsole: platformOwnerEmails().includes(
+        (user.email ?? "").toLowerCase(),
+      ),
+    };
+  }
+
+  if (!user.id) {
+    return {
+      isLoggedIn: false,
+      showDashboard: false,
+      showOwnerConsole: false,
+    };
+  }
+
+  const [{ data: membership }, showOwnerConsole] = await Promise.all([
+    getSupabaseAdmin()
+      .from("admin_users")
+      .select("organization_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle(),
+    isPlatformOwnerUser(user),
+  ]);
+
+  return {
+    isLoggedIn: true,
+    showDashboard: Boolean(membership),
+    showOwnerConsole,
+  };
+}
+
 export async function getCurrentUser() {
   if (isDevAuthBypassEnabled()) {
     return { id: null, email: platformOwnerEmails()[0] ?? "dev@example.com" };
@@ -120,16 +186,8 @@ export async function requireEditor() {
 export async function requirePlatformOwner() {
   const user = await getCurrentUser();
   if (!user?.email) redirect("/login");
-  const isConfiguredOwner = platformOwnerEmails().includes(
-    user.email.toLowerCase(),
-  );
-  if (!isConfiguredOwner && user.id) {
-    const { data } = await getSupabaseAdmin()
-      .from("platform_owners")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!data) throw new Error("Platform owner access required.");
+  if (!(await isPlatformOwnerUser(user))) {
+    throw new Error("Platform owner access required.");
   }
   return user;
 }

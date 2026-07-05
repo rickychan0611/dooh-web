@@ -131,6 +131,15 @@ export const heartbeatRequestSchema = z.object({
   error: z.string().nullable(),
 });
 
+export const adPlaybackEventSchema = z.object({
+  deviceId: z.string(),
+  adId: z.uuid(),
+  eventType: z.enum(["started", "completed", "interrupted"]),
+  contentVersion: z.number().int().nonnegative(),
+  occurredAt: z.iso.datetime(),
+  durationSeconds: z.number().int().nonnegative().nullable().optional(),
+});
+
 export const playerErrorRequestSchema = z.object({
   deviceId: z.string(),
   errorType: z.string().max(80),
@@ -162,6 +171,7 @@ export type PairingSessionStatusResponse = z.infer<
 >;
 export type PendingPairingSession = z.infer<typeof pendingPairingSessionSchema>;
 export type HeartbeatRequest = z.infer<typeof heartbeatRequestSchema>;
+export type AdPlaybackEvent = z.infer<typeof adPlaybackEventSchema>;
 export type PublicSubmission = z.infer<typeof publicSubmissionSchema>;
 
 export type ApiError = {

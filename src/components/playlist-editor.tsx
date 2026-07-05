@@ -17,6 +17,9 @@ type PlaylistItem = {
   weekdays: number[];
   startTime: string | null;
   endTime: string | null;
+  totalViews?: number;
+  views7d?: number;
+  views30d?: number;
 };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -108,7 +111,13 @@ export function PlaylistEditor({
             </div>
             {item.type === "image" ? <img className="playlist-thumb" src={item.previewUrl} alt="" /> : <video className="playlist-thumb" src={item.previewUrl} muted />}
             <div className="playlist-main">
-              <div className="playlist-title"><strong>{item.title}</strong><span className="badge">{item.type}</span></div>
+              <div className="playlist-title">
+                <strong>{item.title}</strong>
+                <span className="badge">{item.type}</span>
+                <span className="badge success">{item.totalViews ?? 0} views</span>
+                <span className="badge">{item.views7d ?? 0} 7d</span>
+                <span className="badge">{item.views30d ?? 0} 30d</span>
+              </div>
               <div className="playlist-fields">
                 <label>Seconds<input type="number" min="1" value={item.duration ?? item.defaultDuration} onChange={(event) => update(index, { duration: Number(event.target.value) })} /></label>
                 <label>Start date<input type="datetime-local" value={item.startsAt?.slice(0, 16) ?? ""} onChange={(event) => update(index, { startsAt: event.target.value })} /></label>

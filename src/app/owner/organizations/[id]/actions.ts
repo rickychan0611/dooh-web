@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { requirePlatformOwner } from "@/lib/auth";
 import { writeAudit } from "@/lib/authorization";
+import { sendTransactionalEmail } from "@/lib/email";
+import { getEnv } from "@/lib/env";
+import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function text(formData: FormData, key: string) {
@@ -93,4 +96,148 @@ export async function setFeatureFlag(formData: FormData) {
     metadata: { enabled },
   });
   revalidatePath(`/owner/organizations/${organizationId}`);
+}
+
+export async function rejectRefundApplication(formData: FormData) {
+  const user = await requirePlatformOwner();
+  const organizationId = text(formData, "organizationId");
+  const refundId = text(formData, "refundId");
+  const note = text(formData, "reviewNote") || "Refund request rejected.";
+  const admin = getSupabaseAdmin();
+  const { data: refund, error } = await admin
+    .from("refund_applications")
+    .update({
+      status: "rejected",
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      review_note: note,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", refundId)
+    .eq("organization_id", organizationId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    actorType: "platform",
+    action: "platform.refund_application_rejected",
+    targetType: "refund_application",
+    targetId: refundId,
+  });
+  if (refund.requested_by) {
+    const { data } = await admin.auth.admin.getUserById(refund.requested_by);
+    if (data.user?.email) {
+      await sendTransactionalEmail({
+        to: data.user.email,
+        subject: "Refund request update",
+        heading: "Your refund request was reviewed",
+        body: note,
+        actionUrl: `${getEnv().NEXT_PUBLIC_APP_URL}/dashboard/billing`,
+        actionLabel: "Open billing",
+        idempotencyKey: `refund-rejected-${refundId}`,
+      });
+    }
+  }
+  revalidatePath(`/owner/organizations/${organizationId}`);
+}
+
+export async function issueRefundApplication(formData: FormData) {
+  const user = await requirePlatformOwner();
+  const organizationId = text(formData, "organizationId");
+  const refundId = text(formData, "refundId");
+  const note = text(formData, "reviewNote") || "Refund approved.";
+  const admin = getSupabaseAdmin();
+  const { data: refund } = await admin
+    .from("refund_applications")
+    .select("*, license_change_events(*)")
+    .eq("id", refundId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (!refund || !["pending", "approved", "failed"].includes(refund.status)) {
+    throw new Error("Refund application is not refundable.");
+  }
+
+  const paymentIntent = refund.license_change_events?.stripe_payment_intent_id;
+  if (!paymentIntent) {
+    const { error } = await admin
+      .from("refund_applications")
+      .update({
+        status: "failed",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+        failure_message: "No Stripe payment intent was recorded for this license change.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", refundId);
+    if (error) throw error;
+    revalidatePath(`/owner/organizations/${organizationId}`);
+    return;
+  }
+
+  try {
+    const stripeRefund = await getStripe().refunds.create({
+      payment_intent: paymentIntent,
+      amount: refund.requested_amount_cents,
+      metadata: {
+        organization_id: organizationId,
+        refund_application_id: refundId,
+        license_change_id: refund.license_change_id,
+      },
+    });
+    const { error } = await admin
+      .from("refund_applications")
+      .update({
+        status: "refunded",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+        stripe_refund_id: stripeRefund.id,
+        failure_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", refundId);
+    if (error) throw error;
+    await writeAudit({
+      organizationId,
+      actorUserId: user.id,
+      actorType: "platform",
+      action: "platform.refund_issued",
+      targetType: "refund_application",
+      targetId: refundId,
+      metadata: { stripeRefundId: stripeRefund.id, amountCents: refund.requested_amount_cents },
+    });
+    if (refund.requested_by) {
+      const { data } = await admin.auth.admin.getUserById(refund.requested_by);
+      if (data.user?.email) {
+        await sendTransactionalEmail({
+          to: data.user.email,
+          subject: "Refund processed",
+          heading: "Your refund was processed",
+          body: "A platform admin approved your request and issued the refund in Stripe.",
+          actionUrl: `${getEnv().NEXT_PUBLIC_APP_URL}/dashboard/billing`,
+          actionLabel: "Open billing",
+          idempotencyKey: `refund-issued-${refundId}`,
+        });
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stripe refund failed.";
+    await admin
+      .from("refund_applications")
+      .update({
+        status: "failed",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+        failure_message: message,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", refundId);
+    throw error;
+  }
+  revalidatePath(`/owner/organizations/${organizationId}`);
+  revalidatePath("/owner");
 }

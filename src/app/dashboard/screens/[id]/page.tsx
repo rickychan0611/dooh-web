@@ -46,8 +46,8 @@ export default async function ScreenDetailPage({
   });
   if (!screen) notFound();
 
-  const [assignmentData, assetData, devices, messageSummary] = await whenDevBypass(
-    [[] as any[], [] as any[], [] as any[], [] as any[]],
+  const [assignmentData, assetData, devices, messageSummary, viewRows] = await whenDevBypass(
+    [[] as any[], [] as any[], [] as any[], [] as any[], [] as any[]],
     async () => {
       const admin = getSupabaseAdmin();
       const results = await Promise.all([
@@ -55,14 +55,26 @@ export default async function ScreenDetailPage({
         admin.from("ads").select("*").eq("organization_id", organizationId).eq("status", "active").order("title"),
         admin.from("screen_devices").select("*").eq("screen_id", id).order("created_at", { ascending: false }),
         admin.from("bulletin_messages").select("status").eq("screen_id", id).neq("status", "deleted"),
+        admin.from("ad_playback_view_counts").select("ad_id,total_views,views_7d,views_30d").eq("screen_id", id),
       ]);
       return [
         results[0].data ?? [],
         results[1].data ?? [],
         results[2].data ?? [],
         results[3].data ?? [],
+        results[4].data ?? [],
       ];
     },
+  );
+  const viewCounts = new Map(
+    (viewRows ?? []).map((row: any) => [
+      row.ad_id,
+      {
+        totalViews: Number(row.total_views ?? 0),
+        views7d: Number(row.views_7d ?? 0),
+        views30d: Number(row.views_30d ?? 0),
+      },
+    ]),
   );
   const assignments = await Promise.all(
     assignmentData.map(async (item: any) => ({
@@ -108,6 +120,7 @@ export default async function ScreenDetailPage({
           weekdays: item.weekdays ?? [0,1,2,3,4,5,6],
           startTime: item.start_time,
           endTime: item.end_time,
+          ...(viewCounts.get(item.ads.id) ?? {}),
         }))} />
       </>}
 

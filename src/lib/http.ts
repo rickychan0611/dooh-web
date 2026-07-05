@@ -10,9 +10,9 @@ export function apiError(
 }
 
 export function handleApiError(error: unknown) {
-  console.error(error);
   if (error instanceof ZodError) {
     return apiError("VALIDATION_ERROR", "Request validation failed.", 422, error.issues);
   }
+  console.error(error);
   return apiError("INTERNAL_ERROR", "Unexpected server error.", 500);
 }
