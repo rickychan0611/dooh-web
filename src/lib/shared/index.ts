@@ -54,6 +54,8 @@ export const playerManifestSchema = z.object({
     adBlockSeconds: z.number().int().positive(),
     bulletinBlockSeconds: z.number().int().positive(),
     defaultMessageDuration: z.number().int().positive(),
+    cecKeepActiveEnabled: z.boolean().default(false),
+    cecKeepActiveIntervalSeconds: z.number().int().positive().default(600),
   }),
   ads: z.array(playerAdSchema),
   bulletin: z.object({
@@ -148,6 +150,31 @@ export const playerErrorRequestSchema = z.object({
   occurredAt: z.iso.datetime(),
 });
 
+export const deviceCommandTypeSchema = z.enum([
+  "cec_turn_on",
+  "cec_turn_off",
+  "cec_active_source",
+  "cec_activate_player",
+  "cec_read_status",
+  "open_wifi_settings",
+  "launcher_make_default",
+  "launcher_disable_stock",
+  "launcher_enable_stock",
+]);
+
+export const playerDeviceCommandSchema = z.object({
+  id: z.uuid(),
+  command: deviceCommandTypeSchema,
+  expiresAt: z.iso.datetime(),
+});
+
+export const playerDeviceCommandResultSchema = z.object({
+  deviceId: z.string().min(8).max(200),
+  success: z.boolean(),
+  result: z.record(z.string(), z.unknown()).default({}),
+  error: z.string().trim().max(2000).nullable().optional(),
+});
+
 export const publicSubmissionSchema = z.object({
   screenCode: z.string().min(3).max(40),
   title: z.string().trim().min(1).max(80),
@@ -172,6 +199,11 @@ export type PairingSessionStatusResponse = z.infer<
 export type PendingPairingSession = z.infer<typeof pendingPairingSessionSchema>;
 export type HeartbeatRequest = z.infer<typeof heartbeatRequestSchema>;
 export type AdPlaybackEvent = z.infer<typeof adPlaybackEventSchema>;
+export type DeviceCommandType = z.infer<typeof deviceCommandTypeSchema>;
+export type PlayerDeviceCommand = z.infer<typeof playerDeviceCommandSchema>;
+export type PlayerDeviceCommandResult = z.infer<
+  typeof playerDeviceCommandResultSchema
+>;
 export type PublicSubmission = z.infer<typeof publicSubmissionSchema>;
 
 export type ApiError = {

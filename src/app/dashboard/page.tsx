@@ -12,7 +12,7 @@ export default async function DashboardPage({
   const { welcome } = await searchParams;
   const { organizationId, organization } = await requireAdmin();
   const emptyStats = { count: 0, data: [] as any[] };
-  const [screens, online, pending, ads, errors, paired] = await whenDevBypass(
+  const [screens, online, ads, errors, paired, activeScreens] = await whenDevBypass(
     [emptyStats, emptyStats, emptyStats, emptyStats, emptyStats, emptyStats],
     async () => {
       const admin = getSupabaseAdmin();
@@ -20,18 +20,19 @@ export default async function DashboardPage({
       return Promise.all([
         admin.from("screens").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
         admin.from("screens").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).gte("last_heartbeat_at", hourAgo),
-        admin.from("bulletin_messages").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending"),
         admin.from("ads").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "active"),
         admin.from("player_errors").select("id, error_type, error_message, created_at, screens!inner(name,organization_id)").eq("screens.organization_id", organizationId).order("created_at", { ascending: false }).limit(5),
         admin.from("screen_devices").select("id,screens!inner(organization_id)", { count: "exact", head: true }).eq("screens.organization_id", organizationId).is("revoked_at", null),
+        admin.from("screens").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_active", true),
       ]);
     },
   );
+  const licensedScreens = Number(organization.screen_license_quantity ?? 1);
 
   const stats = [
     ["Total screens", screens.count ?? 0],
     ["Online now", online.count ?? 0],
-    ["Pending posts", pending.count ?? 0],
+    ["Licenses used", `${activeScreens.count ?? 0} / ${licensedScreens}`],
     ["Active ads", ads.count ?? 0],
   ];
 
@@ -39,27 +40,13 @@ export default async function DashboardPage({
     <>
       {welcome && <p className="notice success">Your 14-day trial is ready. Follow the steps below to put your first screen online.</p>}
       {serviceState(organization) === "grace" && <p className="notice danger">Payment needs attention. Your screens remain active during the seven-day grace period. <Link href="/dashboard/billing">Fix payment</Link></p>}
-      {serviceState(organization) === "suspended" && <p className="notice danger">Screen service is suspended. <Link href="/dashboard/billing">Reactivate your subscription</Link>.</p>}
+      {serviceState(organization) === "suspended" && <p className="notice danger">Screen service is suspended and players are disconnected. <Link href="/dashboard/billing">Resubscribe</Link> to reconnect.</p>}
       <header className="page-header">
         <div><p className="eyebrow">Operations</p><h1>Dashboard</h1></div>
         <Link className="button" href={screens.count ? "/dashboard/screens" : "/dashboard/screens?create=1"}>
           {screens.count ? "Manage screens" : "Create screen"}
         </Link>
       </header>
-      {!screens.count && (
-        <section className="panel">
-          <p className="eyebrow">Getting started</p>
-          <h2>Create your first screen</h2>
-          <p className="muted">
-            Add a screen name and ID, then pair your player with the six-digit code.
-          </p>
-          <div className="actions">
-            <Link className="button" href="/dashboard/screens?create=1">
-              Create screen
-            </Link>
-          </div>
-        </section>
-      )}
       <section className="stat-grid">
         {stats.map(([label, value]) => (
           <article className="stat-card" key={label}><span>{label}</span><strong>{value}</strong></article>

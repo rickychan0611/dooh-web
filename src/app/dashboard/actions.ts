@@ -3,7 +3,11 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminClaimCodeSchema } from "@/lib/shared";
+import {
+  adminClaimCodeSchema,
+  deviceCommandTypeSchema,
+  type DeviceCommandType,
+} from "@/lib/shared";
 import { requireEditor, requireManager } from "@/lib/auth";
 import {
   assertAd,
@@ -41,7 +45,7 @@ export async function createScreen(formData: FormData) {
       screen_code: screenCode,
       name: text(formData, "name"),
       location: text(formData, "location") || null,
-      mode: text(formData, "mode") || "ad_only",
+      mode: "ad_only",
     })
     .select("id")
     .single();
@@ -75,12 +79,6 @@ export async function updateScreen(formData: FormData) {
     .update({
       name: text(formData, "name"),
       location: text(formData, "location") || null,
-      mode: text(formData, "mode"),
-      show_qr_code: formData.get("showQrCode") === "on",
-      public_directory_enabled: formData.get("publicDirectoryEnabled") === "on",
-      ad_block_seconds: Number(text(formData, "adBlockSeconds")),
-      bulletin_block_seconds: Number(text(formData, "bulletinBlockSeconds")),
-      is_active: formData.get("isActive") === "on",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -200,6 +198,106 @@ export async function revokeDevice(formData: FormData) {
   revalidatePath(`/dashboard/screens/${screenId}`);
 }
 
+export async function setCecKeepActive(screenId: string, enabled: boolean) {
+  const { organizationId, user } = await requireManager();
+  await assertScreen(screenId, organizationId);
+  const { error } = await getSupabaseAdmin()
+    .from("screens")
+    .update({ cec_keep_active_enabled: Boolean(enabled) })
+    .eq("id", screenId)
+    .eq("organization_id", organizationId);
+  if (error) throw error;
+  await getSupabaseAdmin().rpc("bump_screen_version", {
+    target_screen: screenId,
+  });
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    action: "screen.cec_keep_active_changed",
+    targetType: "screen",
+    targetId: screenId,
+    metadata: { enabled: Boolean(enabled) },
+  });
+  if (enabled) {
+    try {
+      await queueDeviceCommand(screenId, "cec_activate_player");
+    } catch {
+      // Keep-active is saved even if a command is already in flight.
+    }
+  }
+  revalidatePath(`/dashboard/screens/${screenId}`);
+}
+
+export async function queueDeviceCommand(
+  screenId: string,
+  commandValue: DeviceCommandType,
+) {
+  const { organizationId, user } = await requireManager();
+  const command = deviceCommandTypeSchema.parse(commandValue);
+  await assertScreen(screenId, organizationId);
+  const admin = getSupabaseAdmin();
+  const { data: device, error: deviceError } = await admin
+    .from("screen_devices")
+    .select("id")
+    .eq("screen_id", screenId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (deviceError) throw deviceError;
+  if (!device) throw new Error("No active player is connected to this screen.");
+
+  const now = new Date().toISOString();
+  await admin
+    .from("screen_device_commands")
+    .update({ status: "expired", completed_at: now, updated_at: now })
+    .eq("screen_device_id", device.id)
+    .in("status", ["queued", "running"])
+    .lte("expires_at", now);
+
+  const { data: inFlight, error: inFlightError } = await admin
+    .from("screen_device_commands")
+    .select("id")
+    .eq("screen_device_id", device.id)
+    .in("status", ["queued", "running"])
+    .gt("expires_at", now)
+    .limit(1)
+    .maybeSingle();
+  if (inFlightError) throw inFlightError;
+  if (inFlight) throw new Error("Another device command is still running.");
+
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
+  const { data, error } = await admin
+    .from("screen_device_commands")
+    .insert({
+      organization_id: organizationId,
+      screen_id: screenId,
+      screen_device_id: device.id,
+      requested_by: user.id,
+      command,
+      expires_at: expiresAt,
+    })
+    .select("id,status,created_at,expires_at")
+    .single();
+  if (error) throw error;
+
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    action: "screen.device_command_requested",
+    targetType: "screen",
+    targetId: screenId,
+    metadata: { command, commandId: data.id, screenDeviceId: device.id },
+  });
+
+  return {
+    id: data.id,
+    status: data.status,
+    createdAt: data.created_at,
+    expiresAt: data.expires_at,
+  };
+}
+
 export async function uploadAd(formData: FormData) {
   const { organizationId, user } = await requireEditor();
   const file = formData.get("file");
@@ -291,11 +389,19 @@ export async function assignAd(formData: FormData) {
     assertScreen(screenId, organizationId),
     assertAd(adId, organizationId),
   ]);
-  const { error } = await getSupabaseAdmin().from("screen_ads").upsert(
+  const admin = getSupabaseAdmin();
+  const { data: lastItem } = await admin
+    .from("screen_ads")
+    .select("sort_order")
+    .eq("screen_id", screenId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { error } = await admin.from("screen_ads").upsert(
     {
       screen_id: screenId,
       ad_id: adId,
-      sort_order: Number(text(formData, "sortOrder") || 0),
+      sort_order: (lastItem?.sort_order ?? -1) + 1,
     },
     { onConflict: "screen_id,ad_id" },
   );
@@ -307,6 +413,47 @@ export async function assignAd(formData: FormData) {
     targetType: "screen",
     targetId: screenId,
     metadata: { adId },
+  });
+  revalidatePath(`/dashboard/screens/${screenId}`);
+  revalidatePath("/dashboard/media");
+}
+
+export async function assignAds(formData: FormData) {
+  const { organizationId, user } = await requireEditor();
+  const screenId = text(formData, "screenId");
+  const adIds = [...new Set(formData.getAll("adIds").map(String).filter(Boolean))];
+  if (!adIds.length) throw new Error("Choose at least one media item.");
+
+  await assertScreen(screenId, organizationId);
+  await Promise.all(adIds.map((adId) => assertAd(adId, organizationId)));
+
+  const admin = getSupabaseAdmin();
+  const { data: lastItem } = await admin
+    .from("screen_ads")
+    .select("sort_order")
+    .eq("screen_id", screenId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const firstSortOrder = (lastItem?.sort_order ?? -1) + 1;
+  const { error } = await admin.from("screen_ads").upsert(
+    adIds.map((adId, index) => ({
+      screen_id: screenId,
+      ad_id: adId,
+      sort_order: firstSortOrder + index,
+    })),
+    { onConflict: "screen_id,ad_id" },
+  );
+  if (error) throw error;
+
+  await admin.rpc("bump_screen_version", { target_screen: screenId });
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    action: "playlist.items_assigned",
+    targetType: "screen",
+    targetId: screenId,
+    metadata: { adIds, itemCount: adIds.length },
   });
   revalidatePath(`/dashboard/screens/${screenId}`);
   revalidatePath("/dashboard/media");
@@ -604,22 +751,6 @@ export async function createStaffPost(formData: FormData) {
 
 export async function updateSettings(formData: FormData) {
   const { organizationId, user } = await requireManager();
-  const blockedWords = text(formData, "blockedWords")
-    .split(",")
-    .map((word) => word.trim())
-    .filter(Boolean);
-  const { error } = await getSupabaseAdmin()
-    .from("organization_settings")
-    .update({
-      default_message_duration: Number(text(formData, "defaultMessageDuration")),
-      blocked_words: blockedWords,
-      per_submitter_limit: Number(text(formData, "perSubmitterLimit")),
-      per_submitter_window_minutes: Number(text(formData, "perSubmitterWindowMinutes")),
-      per_screen_hour_limit: Number(text(formData, "perScreenHourLimit")),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("organization_id", organizationId);
-  if (error) throw error;
   const timezone = text(formData, "timezone");
   if (timezone) {
     const { error: organizationError } = await getSupabaseAdmin()

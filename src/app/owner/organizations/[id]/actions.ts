@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requirePlatformOwner } from "@/lib/auth";
 import { writeAudit } from "@/lib/authorization";
+import { disconnectOrganizationPlayers, revertLicensesAfterRefund } from "@/lib/billing-sync";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getEnv } from "@/lib/env";
 import { getStripe } from "@/lib/stripe";
@@ -45,6 +46,63 @@ export async function setOrganizationStatus(formData: FormData) {
     targetType: "organization",
     targetId: organizationId,
     metadata: { status },
+  });
+  revalidatePath(`/owner/organizations/${organizationId}`);
+}
+
+export async function resumeOrganizationSubscription(formData: FormData) {
+  const user = await requirePlatformOwner();
+  const organizationId = text(formData, "organizationId");
+  const admin = getSupabaseAdmin();
+  const { data: billing } = await admin
+    .from("billing_subscriptions")
+    .select("stripe_subscription_id")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (!billing?.stripe_subscription_id) {
+    throw new Error("This organization has no Stripe subscription.");
+  }
+  await getStripe().subscriptions.update(billing.stripe_subscription_id, {
+    cancel_at_period_end: false,
+  });
+  await admin
+    .from("billing_subscriptions")
+    .update({
+      cancel_at_period_end: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", organizationId);
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    actorType: "platform",
+    action: "platform.subscription_resumed",
+    targetType: "subscription",
+    targetId: billing.stripe_subscription_id,
+  });
+  revalidatePath(`/owner/organizations/${organizationId}`);
+}
+
+export async function cancelOrganizationSubscriptionNow(formData: FormData) {
+  const user = await requirePlatformOwner();
+  const organizationId = text(formData, "organizationId");
+  const admin = getSupabaseAdmin();
+  const { data: billing } = await admin
+    .from("billing_subscriptions")
+    .select("stripe_subscription_id")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (billing?.stripe_subscription_id) {
+    await getStripe().subscriptions.cancel(billing.stripe_subscription_id);
+  }
+  await disconnectOrganizationPlayers(organizationId, "canceled");
+  await writeAudit({
+    organizationId,
+    actorUserId: user.id,
+    actorType: "platform",
+    action: "platform.subscription_canceled_now",
+    targetType: "subscription",
+    targetId: billing?.stripe_subscription_id ?? organizationId,
   });
   revalidatePath(`/owner/organizations/${organizationId}`);
 }
@@ -200,6 +258,16 @@ export async function issueRefundApplication(formData: FormData) {
       })
       .eq("id", refundId);
     if (error) throw error;
+    const change = refund.license_change_events;
+    const reverted = change
+      ? await revertLicensesAfterRefund({
+          organizationId,
+          previousQuantity: Number(change.previous_quantity ?? 0),
+          newQuantity: Number(change.new_quantity ?? 0),
+          refundApplicationId: refundId,
+          licenseChangeId: change.id,
+        })
+      : { targetQuantity: null, deactivated: 0 };
     await writeAudit({
       organizationId,
       actorUserId: user.id,
@@ -207,7 +275,12 @@ export async function issueRefundApplication(formData: FormData) {
       action: "platform.refund_issued",
       targetType: "refund_application",
       targetId: refundId,
-      metadata: { stripeRefundId: stripeRefund.id, amountCents: refund.requested_amount_cents },
+      metadata: {
+        stripeRefundId: stripeRefund.id,
+        amountCents: refund.requested_amount_cents,
+        licenses: reverted.targetQuantity,
+        screensDeactivated: reverted.deactivated,
+      },
     });
     if (refund.requested_by) {
       const { data } = await admin.auth.admin.getUserById(refund.requested_by);
@@ -216,7 +289,9 @@ export async function issueRefundApplication(formData: FormData) {
           to: data.user.email,
           subject: "Refund processed",
           heading: "Your refund was processed",
-          body: "A platform admin approved your request and issued the refund in Stripe.",
+          body: reverted.targetQuantity
+            ? `A platform admin issued the refund and reduced your screen licenses to ${reverted.targetQuantity}. Extra screens were deactivated and those players were disconnected.`
+            : "A platform admin approved your request and issued the refund in Stripe.",
           actionUrl: `${getEnv().NEXT_PUBLIC_APP_URL}/dashboard/billing`,
           actionLabel: "Open billing",
           idempotencyKey: `refund-issued-${refundId}`,

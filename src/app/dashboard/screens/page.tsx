@@ -11,7 +11,7 @@ const errorMessages: Record<string, string> = {
   "duplicate-screen-code": "That Screen ID already exists. Choose a unique ID.",
   "missing-name": "Screen name is required.",
   "license-limit":
-    "All screen licenses are in use. Add a license or deactivate another screen.",
+    "All screen licenses are in use. Buy more licenses or deactivate another screen.",
 };
 
 export default async function ScreensPage({
@@ -20,7 +20,7 @@ export default async function ScreensPage({
   searchParams: Promise<{ error?: string; create?: string }>;
 }) {
   const { error, create } = await searchParams;
-  const { organizationId, role } = await requireAdmin();
+  const { organizationId, organization, role } = await requireAdmin();
   const screens = await whenDevBypass([] as any[], async () => {
     const { data } = await getSupabaseAdmin()
       .from("screens")
@@ -29,12 +29,17 @@ export default async function ScreensPage({
       .order("name");
     return data ?? [];
   });
+  const activeScreens = screens.filter((screen: any) => screen.is_active !== false).length;
+  const licensedScreens = Number(organization.screen_license_quantity ?? 1);
 
   return (
     <>
       <CreateScreenPanel
         defaultOpen={create === "1" || screens.length === 0}
         canCreate={role !== "viewer"}
+        canBuyLicenses={role === "owner" || role === "admin"}
+        licensedScreens={licensedScreens}
+        activeScreens={activeScreens}
         errorMessage={
           error
             ? errorMessages[error] ?? "The screen could not be created."
@@ -60,7 +65,6 @@ export default async function ScreensPage({
                 <th>Name</th>
                 <th>Location</th>
                 <th>Screen ID</th>
-                <th>Mode</th>
               </tr>
             </thead>
             <tbody>
@@ -88,7 +92,6 @@ export default async function ScreensPage({
                     <td>
                       <code>{screen.screen_code}</code>
                     </td>
-                    <td>{screen.mode.replaceAll("_", " ")}</td>
                   </tr>
                 );
               })}

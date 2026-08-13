@@ -1,0 +1,10 @@
+
+> @dooh/web@0.1.0 dev
+> next dev --hostname 0.0.0.0 --port 3100
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3100
+- Network:       http://0.0.0.0:3100
+- Environments: .env.local
+✓ Ready in 638ms
+[?25h

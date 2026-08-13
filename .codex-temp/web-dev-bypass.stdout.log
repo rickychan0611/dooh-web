@@ -1,0 +1,17 @@
+
+> @dooh/web@0.1.0 dev
+> next dev --hostname 0.0.0.0 --port 3100
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3100
+- Network:       http://0.0.0.0:3100
+- Environments: .env.local
+✓ Ready in 841ms
+- Experiments (use with caution):
+  · serverActions
+
+ GET /dashboard 200 in 764ms (next.js: 202ms, proxy.ts: 180ms, application-code: 381ms)
+ GET /dashboard 200 in 98ms (next.js: 6ms, proxy.ts: 9ms, application-code: 84ms)
+ GET /dashboard 200 in 89ms (next.js: 4ms, proxy.ts: 6ms, application-code: 79ms)
+ GET /dashboard/screens 200 in 182ms (next.js: 81ms, proxy.ts: 5ms, application-code: 95ms)
+[?25h

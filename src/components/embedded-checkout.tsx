@@ -10,15 +10,18 @@ const stripePromise = loadStripe(
 
 export function CheckoutEmbed({
   quantity,
+  kind = "subscribe",
 }: {
   quantity: number;
+  kind?: "subscribe" | "license_increase";
 }) {
   return (
     <EmbeddedCheckoutProvider
+      key={`${kind}-${quantity}`}
       stripe={stripePromise}
       options={{
         fetchClientSecret: () =>
-          createEmbeddedCheckout({ quantity }),
+          createEmbeddedCheckout({ quantity, kind }),
       }}
     >
       <EmbeddedCheckout />

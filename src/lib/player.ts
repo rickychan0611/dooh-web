@@ -157,6 +157,8 @@ export async function buildManifest(
       adBlockSeconds: screen.ad_block_seconds,
       bulletinBlockSeconds: screen.bulletin_block_seconds,
       defaultMessageDuration: settings?.default_message_duration ?? 12,
+      cecKeepActiveEnabled: screen.cec_keep_active_enabled ?? false,
+      cecKeepActiveIntervalSeconds: 600,
     },
     ads,
     bulletin: {

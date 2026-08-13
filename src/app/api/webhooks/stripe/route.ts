@@ -1,12 +1,15 @@
 import type Stripe from "stripe";
+import {
+  applyPaidLicenseIncrease,
+  disconnectOrganizationPlayers,
+  retrieveStripeSubscription,
+  revertLicensesForRefundedCharge,
+  syncSubscription,
+} from "@/lib/billing-sync";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getEnv } from "@/lib/env";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-
-function iso(unixSeconds?: number | null) {
-  return unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null;
-}
 
 async function ownerEmail(organizationId: string) {
   const admin = getSupabaseAdmin();
@@ -22,84 +25,52 @@ async function ownerEmail(organizationId: string) {
   return data.user?.email ?? null;
 }
 
-async function syncSubscription(subscription: any, eventCreated: number) {
-  const admin = getSupabaseAdmin();
-  const organizationId = subscription.metadata?.organization_id;
-  if (!organizationId) return false;
-  const { data: current } = await admin
-    .from("billing_subscriptions")
-    .select("last_stripe_event_created")
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (Number(current?.last_stripe_event_created ?? 0) > eventCreated) {
-    return false;
-  }
-  const item = subscription.items?.data?.[0];
-  const quantity = Number(item?.quantity ?? 0);
-  const stripeStatus = String(subscription.status);
-  const active = ["active", "trialing"].includes(stripeStatus);
-  const pastDue = ["past_due", "unpaid", "incomplete"].includes(stripeStatus);
-  const status = active ? "active" : pastDue ? "grace" : "suspended";
-  const graceEndsAt = pastDue
-    ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    : null;
-
-  await admin.from("billing_subscriptions").upsert(
-    {
-      organization_id: organizationId,
-      stripe_subscription_id: subscription.id,
-      stripe_subscription_item_id: item?.id ?? null,
-      stripe_price_id: item?.price?.id ?? null,
-      status: stripeStatus,
-      currency: item?.price?.currency ?? "cad",
-      billing_interval: item?.price?.recurring?.interval ?? "month",
-      quantity,
-      current_period_start: iso(subscription.current_period_start),
-      current_period_end: iso(subscription.current_period_end),
-      cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
-      last_stripe_event_created: eventCreated,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "organization_id" },
-  );
-
-  const organizationUpdate: Record<string, unknown> = {
-    status,
-    grace_ends_at: graceEndsAt,
-    suspended_at: status === "suspended" ? new Date().toISOString() : null,
-    deletion_scheduled_at:
-      status === "suspended"
-        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        : null,
-    updated_at: new Date().toISOString(),
-  };
-  if (active && quantity > 0) {
-    organizationUpdate.screen_license_quantity = quantity;
-  }
-  await admin
-    .from("organizations")
-    .update(organizationUpdate)
-    .eq("id", organizationId);
-  return true;
-}
-
 async function processEvent(event: Stripe.Event) {
   const admin = getSupabaseAdmin();
   if (event.type === "checkout.session.completed") {
     const session: any = event.data.object;
     const organizationId = session.metadata?.organization_id;
     if (!organizationId) return null;
-    await admin
-      .from("organizations")
-      .update({
-        stripe_customer_id: String(session.customer),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", organizationId);
+    const customerId =
+      typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id;
+    if (customerId) {
+      await admin
+        .from("organizations")
+        .update({
+          stripe_customer_id: customerId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", organizationId);
+    }
+    if (session.metadata?.checkout_kind === "license_increase") {
+      await applyPaidLicenseIncrease({
+        organizationId,
+        targetQuantity: Number(session.metadata.target_quantity ?? 0),
+        amountCents: Number(session.amount_total ?? 0),
+        stripeInvoiceId:
+          typeof session.invoice === "string"
+            ? session.invoice
+            : session.invoice?.id ?? null,
+        stripePaymentIntentId:
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id ?? null,
+      });
+      return organizationId;
+    }
     if (session.subscription) {
-      const subscription = await getStripe().subscriptions.retrieve(
-        String(session.subscription),
-      );
+      const subscriptionId =
+        typeof session.subscription === "string"
+          ? session.subscription
+          : session.subscription.id;
+      let subscription: any = await retrieveStripeSubscription(subscriptionId);
+      if (!subscription.metadata?.organization_id) {
+        subscription = await getStripe().subscriptions.update(subscriptionId, {
+          metadata: { organization_id: organizationId },
+        });
+      }
       await syncSubscription(subscription, event.created);
     }
     const email = await ownerEmail(organizationId);
@@ -124,7 +95,11 @@ async function processEvent(event: Stripe.Event) {
   ) {
     const subscription: any = event.data.object;
     await syncSubscription(subscription, event.created);
-    return subscription.metadata?.organization_id ?? null;
+    const organizationId = subscription.metadata?.organization_id ?? null;
+    if (event.type === "customer.subscription.deleted" && organizationId) {
+      await disconnectOrganizationPlayers(organizationId, "canceled");
+    }
+    return organizationId;
   }
 
   if (event.type === "invoice.payment_failed") {
@@ -133,7 +108,7 @@ async function processEvent(event: Stripe.Event) {
       invoice.parent?.subscription_details?.subscription ??
       invoice.subscription;
     if (!subscriptionId) return null;
-    const subscription: any = await getStripe().subscriptions.retrieve(
+    const subscription: any = await retrieveStripeSubscription(
       String(subscriptionId),
     );
     const organizationId = subscription.metadata?.organization_id;
@@ -186,7 +161,7 @@ async function processEvent(event: Stripe.Event) {
       invoice.parent?.subscription_details?.subscription ??
       invoice.subscription;
     if (!subscriptionId) return null;
-    const subscription: any = await getStripe().subscriptions.retrieve(
+    const subscription: any = await retrieveStripeSubscription(
       String(subscriptionId),
     );
     const organizationId = subscription.metadata?.organization_id;
@@ -237,13 +212,26 @@ async function processEvent(event: Stripe.Event) {
       .eq("stripe_customer_id", String(charge.customer))
       .maybeSingle();
     if (!organization) return null;
+    const reverted = await revertLicensesForRefundedCharge({
+      organizationId: organization.id,
+      paymentIntentId:
+        typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : charge.payment_intent?.id ?? null,
+      invoiceId:
+        typeof charge.invoice === "string"
+          ? charge.invoice
+          : charge.invoice?.id ?? null,
+    });
     const email = await ownerEmail(organization.id);
     if (email) {
       await sendTransactionalEmail({
         to: email,
         subject: "DOOH Community refund processed",
         heading: "Your refund was recorded",
-        body: "Stripe processed a refund for your account. Your subscription status and future invoices remain available in the billing portal.",
+        body: reverted?.targetQuantity
+          ? `The refund was processed and your screen licenses were reduced to ${reverted.targetQuantity}. Extra screens were deactivated and those players were disconnected.`
+          : "Stripe processed a refund for your account. Your subscription status and future invoices remain available in the billing portal.",
         actionUrl: `${getEnv().NEXT_PUBLIC_APP_URL}/dashboard/billing`,
         actionLabel: "Open billing",
         idempotencyKey: `stripe-${event.id}`,
@@ -259,11 +247,18 @@ export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
   if (!signature) return Response.json({ error: "Missing signature" }, { status: 400 });
   let event: Stripe.Event;
+  const webhookSecret = getEnv().STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return Response.json(
+      { error: "STRIPE_WEBHOOK_SECRET is not configured" },
+      { status: 500 },
+    );
+  }
   try {
     event = getStripe().webhooks.constructEvent(
       await request.text(),
       signature,
-      getEnv().STRIPE_WEBHOOK_SECRET,
+      webhookSecret,
     );
   } catch {
     return Response.json({ error: "Invalid signature" }, { status: 400 });

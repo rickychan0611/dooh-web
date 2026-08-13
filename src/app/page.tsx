@@ -68,7 +68,7 @@ export default async function HomePage() {
             )}
           </div>
           {!navState.isLoggedIn && (
-            <p className="microcopy">No credit card · $9/month includes up to 3 screens · Cancel anytime</p>
+            <p className="microcopy">No credit card · $9 per screen / month · Cancel anytime</p>
           )}
           <div className="player-actions">
             <a
@@ -131,7 +131,7 @@ export default async function HomePage() {
         <div className="steps"><article><span>1</span><h3>Create a screen</h3><p>Name it and choose promotions, community posts, or both.</p></article><article><span>2</span><h3>Add your content</h3><p>Upload media, set the order and schedule, then switch items on.</p></article><article><span>3</span><h3>Enter the code</h3><p>Pair one browser or TV player and watch the screen update.</p></article></div>
       </section>
       <section className="marketing-section pricing-callout">
-        <div><p className="eyebrow">Simple pricing</p><h2>One complete monthly plan.</h2><p>$9/month includes up to 3 active screens. Extra screens are $3/month each.</p></div>
+        <div><p className="eyebrow">Simple pricing</p><h2>One price per screen.</h2><p>$9 per screen each month. No discounts, no extra-screen tiers.</p></div>
         <div className="actions">
           {!navState.isLoggedIn ? (
             <>

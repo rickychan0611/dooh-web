@@ -19,7 +19,6 @@ test.describe("organization admin workflows with development auth bypass", () =>
       page.locator("header").getByRole("button", { name: "Create screen" }),
     ).toBeVisible();
     await expect(page.getByLabel("Screen ID")).toBeVisible();
-    await expect(page.getByLabel("Mode")).toBeVisible();
   });
 
   test("billing workflow surfaces monthly plan and refund status", async ({
@@ -27,8 +26,8 @@ test.describe("organization admin workflows with development auth bypass", () =>
   }) => {
     await page.goto("/dashboard/billing");
     await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
-    await expect(page.getByText("Simple monthly plan")).toBeVisible();
-    await expect(page.getByText("Refund requests")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Screen subscription" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible();
     await expect(
       page.getByText("No refundable license additions yet."),
     ).toBeVisible();
@@ -37,7 +36,6 @@ test.describe("organization admin workflows with development auth bypass", () =>
   test("core admin sections remain routable", async ({ page }) => {
     const sections = [
       ["/dashboard/media", "Media library"],
-      ["/dashboard/community", "Members"],
       ["/dashboard/team", "Team"],
       ["/dashboard/settings", "Settings"],
     ] as const;

@@ -1,3 +1,4 @@
+import { disconnectOrganizationPlayers } from "@/lib/billing-sync";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getEnv } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -63,15 +64,7 @@ export async function GET(request: Request) {
       organization.status === "trialing" &&
       new Date(organization.trial_ends_at).getTime() <= now
     ) {
-      await admin
-        .from("organizations")
-        .update({
-          status: "suspended",
-          suspended_at: new Date().toISOString(),
-          deletion_scheduled_at: new Date(now + 30 * 86400000).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", organization.id);
+      await disconnectOrganizationPlayers(organization.id, "suspended");
       await record(organization.id, "trial.expired");
       suspensions += 1;
       continue;
@@ -81,15 +74,7 @@ export async function GET(request: Request) {
       organization.grace_ends_at &&
       new Date(organization.grace_ends_at).getTime() <= now
     ) {
-      await admin
-        .from("organizations")
-        .update({
-          status: "suspended",
-          suspended_at: new Date().toISOString(),
-          deletion_scheduled_at: new Date(now + 30 * 86400000).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", organization.id);
+      await disconnectOrganizationPlayers(organization.id, "suspended");
       await record(organization.id, "billing.grace_expired");
       suspensions += 1;
       continue;
