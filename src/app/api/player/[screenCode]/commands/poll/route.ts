@@ -99,7 +99,11 @@ export async function POST(
     if (error) throw error;
     let command = data?.[0];
     if (!command) {
-      command = await queueKeepActiveCommand(admin, auth.device);
+      command = await queueKeepActiveCommand(admin, {
+        id: String(auth.device.id),
+        screen_id: String(auth.device.screen_id),
+        claimed_by: auth.device.claimed_by ?? null,
+      });
     }
     if (!command) return new Response(null, { status: 204 });
     if (
